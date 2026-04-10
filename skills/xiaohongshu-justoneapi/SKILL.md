@@ -44,6 +44,7 @@ JUSTONEAPI_TOKEN=your_token_here
 | 用户意图 | 接口定义 | 脚本 |
 |----------|----------|------|
 | 搜索用户 / 发现博主 / 查账号 | `apis/search_users.md` | `scripts/search_users.py` |
+| 抓取用户发布的笔记 / 内容分析 / 竞品监控 | `apis/get_user_posts.md` | `scripts/get_user_posts.py` |
 
 ## 运行方式
 
@@ -55,7 +56,9 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 直接运行，uv 自动处理依赖
 uv run scripts/search_users.py <keyword> [max_pages]
+uv run scripts/get_user_posts.py <user_id> [user_id2 ...] [--since YYYY-MM-DD] [--workers N]
 
 # 示例
 uv run scripts/search_users.py 美妆博主 5
+uv run scripts/get_user_posts.py 5b33a8556b58b74911b89949 5f279d91000000000100836c --since 2025-01-01
 ```
