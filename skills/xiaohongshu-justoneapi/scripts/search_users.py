@@ -19,16 +19,27 @@ from pathlib import Path
 import requests
 
 # ── Token 加载 ──────────────────────────────────────────────
-def load_token():
-    """优先级：.env 文件 → 环境变量 → 命令行交互输入"""
-    env_path = Path(".env")
-    if env_path.exists():
+def find_env_token():
+    """在项目目录内递归查找 .env，当前目录优先，再搜子目录。"""
+    cwd = Path.cwd()
+    # 当前目录优先，再递归搜索子目录中的 .env
+    candidates = [cwd / ".env", *sorted(cwd.rglob(".env"))]
+    for env_path in candidates:
+        if not env_path.exists():
+            continue
         for line in env_path.read_text(encoding="utf-8").splitlines():
             for key in ("JUSTONEAPI_TOKEN", "JUST_ONE_API_TOKEN"):
                 if line.startswith(f"{key}="):
                     token = line.split("=", 1)[1].strip()
                     if token:
                         return token
+    return None
+
+def load_token():
+    """优先级：.env 文件 → 环境变量 → 命令行交互输入"""
+    token = find_env_token()
+    if token:
+        return token
     token = os.environ.get("JUSTONEAPI_TOKEN") or os.environ.get("JUST_ONE_API_TOKEN")
     if token:
         return token
