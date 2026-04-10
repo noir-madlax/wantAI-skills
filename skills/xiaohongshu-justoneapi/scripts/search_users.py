@@ -1,6 +1,13 @@
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#   "requests",
+# ]
+# ///
+#
 # xhs_search_users.py —— 小红书用户搜索，结果落地为 CSV
-# 用法：python search_users.py <keyword> [max_pages]
-# 示例：python search_users.py 美妆博主 5
+# 用法：uv run search_users.py <keyword> [max_pages]
+# 示例：uv run search_users.py 美妆博主 5
 
 import csv
 import os

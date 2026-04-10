@@ -44,3 +44,18 @@ JUSTONEAPI_TOKEN=your_token_here
 | 用户意图 | 接口定义 | 脚本 |
 |----------|----------|------|
 | 搜索用户 / 发现博主 / 查账号 | `apis/search_users.md` | `scripts/search_users.py` |
+
+## 运行方式
+
+所有脚本统一使用 `uv run` 执行，无需手动安装依赖：
+
+```bash
+# 安装 uv（若尚未安装）
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 直接运行，uv 自动处理依赖
+uv run scripts/search_users.py <keyword> [max_pages]
+
+# 示例
+uv run scripts/search_users.py 美妆博主 5
+```
