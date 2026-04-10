@@ -1,0 +1,15 @@
+# 环境变量（含 token，禁止提交）
+.env
+.env.*
+!.env.example
+
+# 采集输出
+*.csv
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# macOS
+.DS_Store
