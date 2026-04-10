@@ -19,8 +19,7 @@ npx skills add wantAI/wantAI-skills -a cursor -a augment
 
 | Skill | 描述 |
 |-------|------|
-| [code-review](./skills/code-review/SKILL.md) | 系统性代码审查，识别安全漏洞、性能问题并给出改进建议 |
-| [xiaohongshu-justoneapi](./skills/xiaohongshu-justoneapi/SKILL.md) | 通过 JustOneAPI 采集小红书数据，支持用户搜索、达人发现、账号研究 |
+| [xiaohongshu-justoneapi](./skills/xiaohongshu-justoneapi/SKILL.md) | 通过 JustOneAPI 采集小红书数据，支持用户搜索、笔记抓取，结果输出为 CSV |
 
 ## 目录结构
 
@@ -28,7 +27,11 @@ npx skills add wantAI/wantAI-skills -a cursor -a augment
 wantAI-skills/
 └── skills/
     └── <skill-name>/
-        └── SKILL.md        # Skill 定义文件（含 YAML frontmatter）
+        ├── SKILL.md        # Skill 定义文件（含 YAML frontmatter）
+        ├── apis/           # 接口文档（可选）
+        │   └── <api>.md
+        └── scripts/        # 可直接运行的脚本（可选，uv run）
+            └── <script>.py
 ```
 
 ## 如何贡献新 Skill
