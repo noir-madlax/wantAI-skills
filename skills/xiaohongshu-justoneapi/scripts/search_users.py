@@ -33,14 +33,17 @@ def find_env_token():
     return None
 
 def load_token():
-    """优先级：.env 文件 → 环境变量 → 命令行交互输入"""
+    """优先级：.env 文件 → 环境变量，均未找到则报错退出。"""
     token = find_env_token()
     if token:
         return token
     token = os.environ.get("JUSTONEAPI_TOKEN") or os.environ.get("JUST_ONE_API_TOKEN")
     if token:
         return token
-    return input("请输入 JustOneAPI Token：").strip()
+    raise RuntimeError(
+        "未找到 JustOneAPI Token，请在 .env 文件中添加：\n"
+        "  JUSTONEAPI_TOKEN=your_token_here"
+    )
 
 # ── API 调用 ─────────────────────────────────────────────────
 BASE_URL    = "https://api.justoneapi.com"

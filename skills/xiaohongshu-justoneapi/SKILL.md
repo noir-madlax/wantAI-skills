@@ -11,9 +11,9 @@ description: 当用户需要爬取或采集小红书（RedNote）数据时触发
 
 所有接口均通过 query 参数 `token` 鉴权。按以下优先级获取 token：
 
-1. 用户在对话中直接提供
-2. 读取项目根目录 `.env` 文件，查找 `JUSTONEAPI_TOKEN` 或 `JUSTONEAPI_API_KEY`
-3. 以上均无，则告知用户提供 token，并建议将其写入 `.env` 文件
+1. 从当前目录向上逐级查找 `.env` 文件，匹配 `JUSTONEAPI_TOKEN` 或 `JUST_ONE_API_TOKEN`
+2. 读取系统环境变量 `JUSTONEAPI_TOKEN` 或 `JUST_ONE_API_TOKEN`
+3. 均未找到则报错退出，提示用户在 `.env` 中添加 token
 
 生成代码时，token 应从环境变量读取，不要硬编码到代码中：
 
