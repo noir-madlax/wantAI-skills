@@ -9,64 +9,19 @@ description: 当用户需要爬取或采集小红书（RedNote）数据时触发
 
 ## 前置：获取 Token
 
-所有接口均通过 query 参数 `token` 鉴权。若用户未提供，先向其索取 JustOneAPI 访问令牌。
+所有接口均通过 query 参数 `token` 鉴权。按以下优先级获取 token：
 
-## 接口：用户搜索 (V2)
+1. 用户在对话中直接提供
+2. 读取项目根目录 `.env` 文件，查找 `JUSTONEAPI_TOKEN` 或 `JUSTONEAPI_API_KEY`
+3. 以上均无，则告知用户提供 token，并建议将其写入 `.env` 文件
 
-按关键词搜索小红书用户，适用于达人发现、账号研究、竞品分析等场景。
-
-**请求**
+生成代码时，token 应从环境变量读取，不要硬编码到代码中：
 
 ```
-GET https://api.justoneapi.com/api/xiaohongshu/search-user/v2
+JUSTONEAPI_TOKEN=your_token_here
 ```
 
-| 参数 | 必填 | 类型 | 默认值 | 说明 |
-|------|:----:|------|:------:|------|
-| `token` | ✅ | string | — | JustOneAPI 访问令牌 |
-| `keyword` | ✅ | string | — | 搜索关键词 |
-| `page` | ❌ | integer | `1` | 页码，用于翻页 |
-
-> 中国大陆访问慢时，将 base URL 替换为 `http://47.117.133.51:30015`。
-
-**响应结构**
-
-```json
-{
-  "code": 0,
-  "data": {
-    "users": [
-      {
-        "id": "68b016570000000018028e20",
-        "name": "昵称",
-        "red_id": "小红书号",
-        "image": "头像 URL",
-        "desc": "简介（通常含小红书号）",
-        "sub_title": "子标题",
-        "link": "xhsdiscover://1/user/user.<id>",
-        "red_official_verified": false,
-        "red_official_verify_type": 0,
-        "followed": false,
-        "self": false
-      }
-    ],
-    "filters": []
-  }
-}
-```
-
-**关键字段说明**
-
-- `data.users`：当页用户列表，每页约 20 条
-- `red_official_verified`：是否官方认证（蓝 V）
-- `red_official_verify_type`：认证类型（`0` = 未认证）
-- `link`：用户主页深链
-
-**分页采集**
-
-递增 `page` 翻页；当 `data.users` 返回空数组时，表示已到末页。
-
-## 错误处理
+## 错误码（所有接口通用）
 
 > ⚠️ `code` 在**响应体**中，不是 HTTP 状态码。HTTP 200 也须检查 `code`。
 
@@ -82,10 +37,10 @@ GET https://api.justoneapi.com/api/xiaohongshu/search-user/v2
 | `600` | 权限不足 | 告知用户当前 token 无此接口权限 |
 | `601` | 余额不足 | 告知用户需在 JustOneAPI 充值 |
 
-## 编写代码的注意事项
+## 接口目录
 
-1. `token` 始终通过 **query 参数**传递，不要放入 Header
-2. 请求超时设置 **≥ 60 秒**，采集响应可能较慢
-3. `code: 301` 属正常瞬时失败，须实现**重试逻辑**
-4. 批量翻页时建议每次请求间隔 1-2 秒，避免触发 `302`
-5. 使用用户偏好的语言生成代码；未指明时优先使用 Python
+根据用户意图，按需读取对应文件，**不要自行重写脚本**。
+
+| 用户意图 | 接口定义 | 脚本 |
+|----------|----------|------|
+| 搜索用户 / 发现博主 / 查账号 | `apis/search_users.md` | `scripts/search_users.py` |
