@@ -1,6 +1,6 @@
 ---
 name: xiaohongshu-justoneapi
-description: 当用户需要爬取或采集小红书（RedNote）数据时触发，包括：搜索用户/博主、发现 KOL/达人、研究账号信息等场景。通过 JustOneAPI 调用小红书接口获取数据。
+description: 当用户需要爬取或采集小红书（RedNote）数据时触发，包括：搜索笔记/内容、话题发现、搜索用户/博主、发现 KOL/达人、研究账号信息、抓取用户笔记等场景。通过 JustOneAPI 调用小红书接口获取数据。
 ---
 
 # 小红书数据采集 —— JustOneAPI
@@ -45,6 +45,7 @@ JUSTONEAPI_TOKEN=your_token_here
 |----------|----------|------|
 | 搜索用户 / 发现博主 / 查账号 | `apis/search_users.md` | `scripts/search_users.py` |
 | 抓取用户发布的笔记 / 内容分析 / 竞品监控 | `apis/get_user_posts.md` | `scripts/get_user_posts.py` |
+| 搜索笔记 / 话题发现 / 关键词采集 / 舆情追踪 | `apis/search_notes.md` | `scripts/search_notes.py` |
 
 ## 运行方式
 
@@ -57,8 +58,11 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # 直接运行，uv 自动处理依赖
 uv run scripts/search_users.py <keyword> [max_pages] [--output-dir DIR]
 uv run scripts/get_user_posts.py <user_id> [user_id2 ...] [--output-dir DIR] [--since YYYY-MM-DD] [--workers N]
+uv run scripts/search_notes.py <keyword> <max_pages> [--sort SORT] [--note-type TYPE] [--output-dir DIR]
 
 # 示例
 uv run scripts/search_users.py 美妆博主 5 --output-dir ./output
 uv run scripts/get_user_posts.py 5b33a8556b58b74911b89949 5f279d91000000000100836c --output-dir ./output --since 2025-01-01
+uv run scripts/search_notes.py 美妆 10 --sort popularity_descending --note-type _1 --output-dir ./output
+uv run scripts/search_notes.py 机车骑行 20 --sort time_descending --output-dir ./output
 ```
