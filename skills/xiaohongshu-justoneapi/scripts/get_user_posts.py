@@ -3,8 +3,8 @@
 # dependencies = ["requests"]
 # ///
 # get_user_posts.py —— 抓取小红书用户笔记列表，支持多用户、断点续传、时间过滤
-# 用法：uv run get_user_posts.py <user_id> [user_id2 ...] [--since YYYY-MM-DD] [--workers N]
-# 示例：uv run get_user_posts.py 5b33a8556b58b74911b89949 --since 2025-01-01
+# 用法：uv run get_user_posts.py <user_id> [user_id2 ...] [--output-dir DIR] [--since YYYY-MM-DD] [--workers N]
+# 示例：uv run get_user_posts.py 5b33a8556b58b74911b89949 --output-dir ./output --since 2025-01-01
 
 import argparse, csv, json, os, sys, threading, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -171,9 +171,9 @@ def fetch_user(
 def main():
     ap = argparse.ArgumentParser(description="抓取小红书用户笔记列表")
     ap.add_argument("user_ids", nargs="+", help="小红书 userId，可传多个")
+    ap.add_argument("--output-dir", default=".", help="输出目录（默认当前目录）")
     ap.add_argument("--since", help="只采集此日期之后的笔记，格式 YYYY-MM-DD（CST）")
     ap.add_argument("--workers", type=int, default=3, help="并发线程数（默认 3）")
-    ap.add_argument("--output", default="xhs_posts.csv", help="输出 CSV 文件名")
     args = ap.parse_args()
 
     token = load_token()
@@ -182,8 +182,10 @@ def main():
         d = datetime.strptime(args.since, "%Y-%m-%d").replace(tzinfo=_CST)
         since_ts = int(d.timestamp())
 
-    csv_file = Path(args.output)
-    pfile    = Path(".xhs_posts_progress.json")
+    out_dir  = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    csv_file = out_dir / "xhs_posts.csv"
+    pfile    = out_dir / ".xhs_posts_progress.json"
     progress = load_progress(pfile)
     seen_ids = load_seen(csv_file)
     file_exists = csv_file.exists() and csv_file.stat().st_size > 0

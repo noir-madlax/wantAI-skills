@@ -55,10 +55,10 @@ JUSTONEAPI_TOKEN=your_token_here
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 直接运行，uv 自动处理依赖
-uv run scripts/search_users.py <keyword> [max_pages]
-uv run scripts/get_user_posts.py <user_id> [user_id2 ...] [--since YYYY-MM-DD] [--workers N]
+uv run scripts/search_users.py <keyword> [max_pages] [--output-dir DIR]
+uv run scripts/get_user_posts.py <user_id> [user_id2 ...] [--output-dir DIR] [--since YYYY-MM-DD] [--workers N]
 
 # 示例
-uv run scripts/search_users.py 美妆博主 5
-uv run scripts/get_user_posts.py 5b33a8556b58b74911b89949 5f279d91000000000100836c --since 2025-01-01
+uv run scripts/search_users.py 美妆博主 5 --output-dir ./output
+uv run scripts/get_user_posts.py 5b33a8556b58b74911b89949 5f279d91000000000100836c --output-dir ./output --since 2025-01-01
 ```

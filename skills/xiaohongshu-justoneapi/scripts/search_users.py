@@ -100,10 +100,11 @@ def write_csv(users, filepath, write_header):
         writer.writerows(users)
 
 # ── 主流程 ───────────────────────────────────────────────────
-def crawl(keyword, max_pages=None):
+def crawl(keyword, max_pages=None, output_dir: Path = Path(".")):
     token    = load_token()
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filepath = f"xhs_users_{keyword}_{ts}.csv"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    filepath = output_dir / f"xhs_users_{keyword}_{ts}.csv"
     total    = 0
 
     for page in range(1, (max_pages or 9999) + 1):
@@ -125,6 +126,10 @@ def crawl(keyword, max_pages=None):
     print(f"\n✅ 完成，共 {total} 条 → {filepath}")
 
 if __name__ == "__main__":
-    _keyword   = sys.argv[1] if len(sys.argv) > 1 else input("搜索关键词：").strip()
-    _max_pages = int(sys.argv[2]) if len(sys.argv) > 2 else None
-    crawl(_keyword, _max_pages)
+    import argparse
+    ap = argparse.ArgumentParser(description="小红书用户搜索")
+    ap.add_argument("keyword", help="搜索关键词")
+    ap.add_argument("max_pages", nargs="?", type=int, help="最大采集页数")
+    ap.add_argument("--output-dir", default=".", help="输出目录（默认当前目录）")
+    args = ap.parse_args()
+    crawl(args.keyword, args.max_pages, Path(args.output_dir))
