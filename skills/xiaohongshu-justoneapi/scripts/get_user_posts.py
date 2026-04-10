@@ -171,7 +171,7 @@ def fetch_user(
 def main():
     ap = argparse.ArgumentParser(description="抓取小红书用户笔记列表")
     ap.add_argument("user_ids", nargs="+", help="小红书 userId，可传多个")
-    ap.add_argument("--output-dir", default=".", help="输出目录（默认当前目录）")
+    ap.add_argument("--output-dir", default="search_logs", help="输出目录（默认 search_logs）")
     ap.add_argument("--since", help="只采集此日期之后的笔记，格式 YYYY-MM-DD（CST）")
     ap.add_argument("--workers", type=int, default=3, help="并发线程数（默认 3）")
     args = ap.parse_args()

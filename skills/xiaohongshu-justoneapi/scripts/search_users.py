@@ -130,6 +130,6 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="小红书用户搜索")
     ap.add_argument("keyword", help="搜索关键词")
     ap.add_argument("max_pages", nargs="?", type=int, help="最大采集页数")
-    ap.add_argument("--output-dir", default=".", help="输出目录（默认当前目录）")
+    ap.add_argument("--output-dir", default="search_logs", help="输出目录（默认 search_logs）")
     args = ap.parse_args()
     crawl(args.keyword, args.max_pages, Path(args.output_dir))
