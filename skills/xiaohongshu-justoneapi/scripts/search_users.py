@@ -20,19 +20,16 @@ import requests
 
 # ── Token 加载 ──────────────────────────────────────────────
 def find_env_token():
-    """在项目目录内递归查找 .env，当前目录优先，再搜子目录。"""
-    cwd = Path.cwd()
-    # 当前目录优先，再递归搜索子目录中的 .env
-    candidates = [cwd / ".env", *sorted(cwd.rglob(".env"))]
-    for env_path in candidates:
-        if not env_path.exists():
-            continue
-        for line in env_path.read_text(encoding="utf-8").splitlines():
-            for key in ("JUSTONEAPI_TOKEN", "JUST_ONE_API_TOKEN"):
-                if line.startswith(f"{key}="):
-                    token = line.split("=", 1)[1].strip()
-                    if token:
-                        return token
+    """从当前目录向上逐级查找 .env，直到根目录。"""
+    for directory in [Path.cwd(), *Path.cwd().parents]:
+        env_path = directory / ".env"
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                for key in ("JUSTONEAPI_TOKEN", "JUST_ONE_API_TOKEN"):
+                    if line.startswith(f"{key}="):
+                        token = line.split("=", 1)[1].strip()
+                        if token:
+                            return token
     return None
 
 def load_token():
