@@ -20,6 +20,7 @@ npx skills add wantAI/wantAI-skills -a cursor -a augment
 | Skill | 描述 |
 |-------|------|
 | [xiaohongshu-justoneapi](./skills/xiaohongshu-justoneapi/SKILL.md) | 通过 JustOneAPI 采集小红书数据，支持用户搜索、笔记抓取，结果输出为 CSV |
+| [social-post-writer](./skills/social-post-writer/SKILL.md) | 根据 brief 与 KOL 信息生成小红书 / Instagram / Facebook 可发布帖子文案 |
 
 ## 目录结构
 
