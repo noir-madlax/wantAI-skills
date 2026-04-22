@@ -38,7 +38,7 @@ preload:
 
 ## 平台规则
 
-以下为目标平台 `$platform` 的撰写规则，由执行器自动注入对应 `platforms/*.md`。规则按**四个模块**（`meta` / `caption` / `hashtags` / `images`）组织，对齐 `SaveContent` 工具的参数结构。
+以下为目标平台 `$platform` 的撰写规则，由执行器自动注入对应 `platforms/*.md`。规则按**四个模块**（`meta` / `caption` / `hashtags` / `images`）组织，装配后整体作为 `SaveContent` 工具的 `content` 入参。
 
 {{PLATFORM_RULES}}
 
@@ -46,9 +46,21 @@ preload:
 
 本 Skill 的最终产出**必须且仅通过一次 `SaveContent` 工具调用**完成；不要把完整文案、hashtags、图片 prompt 以纯文本形式写进对话正文。调用成功后，后端会回传一条带 `content_id` 的 CARD，前端据此渲染预览。
 
+- **工具入参形式**：`SaveContent` 只接受一个对象参数 `content`，把四个模块装配成如下形状作为 `content` 传入：
+
+  ```json
+  {
+    "meta":     { /* 可选，模块字段详见平台规则 */ },
+    "caption":  { "body": "必填非空字符串", "variants": [...], "tone_notes": "..." },
+    "hashtags": { "items": [...], "placement": "...", "max": 10 },
+    "images":   { "style": "...", "aspect_ratio": "...", "items": [ { "role": "...", "prompt": "...", "alt": "..." }, ... ] }
+  }
+  ```
+
 - **必填模块**：`caption`（`body` 非空）、`images`（`style` + `aspect_ratio` + `items[]`，数量与角色遵循平台规则）
 - **强烈建议填写**：`meta`（小红书需要 `title`）、`hashtags`（按平台规则控制数量与位置）
-- **禁止**：在工具参数里传 `platform` / `creative_id` / `session_id`（后端自动注入）；把同一帖子发多次 `SaveContent`
+- **禁止**：在 `content` 之外传任何其他字段；`creative_id` / `platform` / `session_id` / `parent_version_id` 均由后端自动注入，不要尝试覆盖或传递
+- **禁止**：**同一轮回复里**多次调用 `SaveContent`。用户后续要求修改时，在**新的一轮**里再次调用即可（后端会自动把上一版作为 `parent_version_id`）
 - **变体（可选）**：若用户要求 A/B 两版，主版放 `caption.body`，备选版放 `caption.variants[{label, body}]`；图片 prompts 仍只给一套
 - **合规与披露**：在 `caption.body` 里按平台规定处理（IG `#ad`、小红书蒲公英报备等）；不要把披露放到 `meta.cta`
 
@@ -66,7 +78,7 @@ preload:
 2. **抽取要点**：从 Brief 萃取 3 条最能撑起核心卖点的支撑点；从 KOL `voice` / `content_preference` 抽取 2–3 个语言特征（口头禅 / 句式 / 惯用表达）
 3. **构图规划**：依据平台规则确定 `images.items[]` 的数量与角色（cover / content / closing），为每张图写 detailed prompt
 4. **自检**：对照 KOL `no_go_list`、Brief 合规项与平台规则做一次回扫，违规直接改写
-5. **一次性调用 `SaveContent`**：把 `meta` / `caption` / `hashtags` / `images` 装配后发起工具调用
+5. **一次性调用 `SaveContent`**：把 `meta` / `caption` / `hashtags` / `images` 装配成单个 `content` 对象，作为工具的 `content` 入参发起调用
 
 ## 工具调用后的回复
 
@@ -74,4 +86,4 @@ preload:
 
 > 已生成并落库，版本 v3（#248）。如需改某处，告诉我调哪块即可。
 
-若用户接下来要求修改，按差异更新后再次调用 `SaveContent`（后端会自动把上一版作为 `parent_version_id`）。
+若用户接下来要求修改，**在新的一轮回复里**按差异更新后再次调用 `SaveContent`（后端会自动把上一版作为 `parent_version_id`）。

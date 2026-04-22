@@ -1,6 +1,6 @@
 # 小红书 Xiaohongshu —— 撰写规则（模块化）
 
-产出按 `SaveContent` 工具的四个模块装配：`meta` / `caption` / `hashtags` / `images`。
+产出装配为 `SaveContent` 工具 `content` 入参中的四个模块：`meta` / `caption` / `hashtags` / `images`。
 
 ## `meta`
 
