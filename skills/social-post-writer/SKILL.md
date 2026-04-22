@@ -1,10 +1,10 @@
 ---
 name: social-post-writer
-description: 根据营销 Brief 与 KOL 人设生成小红书 / Instagram / Facebook 的可发布帖子文案。当用户需要写社媒帖子、种草文案、KOL 投放内容、多平台改写、品牌/产品推广帖子时触发。
+description: 根据营销 Brief 与 KOL 人设，为当前 creative 绑定的平台（小红书 / Instagram / Facebook）生成可发布的帖子：文案 + hashtags + 封面与配图的整体风格和每张图的生成 prompt。当用户需要写社媒帖子、种草文案、KOL 投放内容、品牌/产品推广帖子、给图生成 prompt 时触发。
 arguments:
   - kol_id
   - brief_id
-  - platforms
+  - platform
 preload:
   - name: KOL_PERSONA_CORE
     loader: kol_persona_core
@@ -16,18 +16,16 @@ preload:
     loader: read_skill_files
     args:
       path_template: "platforms/{item}.md"
-      items: "$platforms"
-      default_items: "xiaohongshu,instagram,facebook"
-      separator: "\n\n---\n\n"
+      items: "$platform"
 ---
 
-# 社媒帖子撰写(小红书 / IG / FB)
+# 社媒帖子撰写（单平台 · 模块化产出）
 
-根据 Brief 与 KOL 人设,为指定平台生成可直接发布的帖子文案。
+根据 Brief 与 KOL 人设，为**当前 creative 绑定的单一平台** `$platform` 生成一条可直接发布的帖子。产出包含文案、hashtags、整体图片风格与每张图的生成 prompt，通过调用 `SaveContent` 工具一次性落库。
 
-## Context(执行器已注入)
+## Context（执行器已注入）
 
-以下两块由后端在 Skill 激活时从数据库取出并注入,视为**权威输入**;不要质疑其准确性,也不要要求用户重新提供这些字段。若某块明显为空或字段缺失,按"工作流程-步骤 1"处理。
+以下内容由后端在 Skill 激活时从数据库取出并注入，视为**权威输入**；不要质疑其准确性，也不要要求用户重新提供这些字段。若某块明显为空或字段缺失，按「工作流程 · 步骤 1」处理。
 
 ### KOL 人设
 {{KOL_PERSONA_CORE}}
@@ -35,31 +33,45 @@ preload:
 ### Brief
 {{BRIEF_FULL}}
 
-### 本次生成平台
-`$platforms` —— 取值为 `xiaohongshu` / `instagram` / `facebook` 的子集(逗号分隔);未指定时默认三个平台全出。
+### 本次目标平台
+`$platform` —— 单一平台，取值 `xiaohongshu` / `instagram` / `facebook` 之一；由 session 的 creative 绑定，**不可在工具调用里覆盖**。
 
-## 通用规则(所有平台)
+## 平台规则
 
-1. 贴合 KOL 的 `positioning` / `tone_tags` / `voice`,**第一人称**写作;避免"官方口径"
-2. 只使用 Brief 明示的卖点与事实;不承诺未列出的功效 / 数据
-3. 严格遵守 KOL 的 `no_go_list` 与 Brief 的合规要求;涉及医疗、功效、绝对化用词自行合规化
-4. 不贬低竞品;广告 / 合作关系按平台规定披露(如 IG `#ad`、小红书蒲公英报备提示)
-5. 每个平台默认给 **2 版** 供选择(版本 A 偏稳、版本 B 偏钩子/反转)
-6. 输出必标注字符数;同一批内容不要跨平台照搬,按平台规则改写
-
-## 平台规则（本次目标平台）
-
-以下内容由执行器根据 `$platforms` 自动注入对应 `platforms/*.md`；未列出的平台不会出现在这里。每个平台块包含：结构 / 话题 / 合规 / 版本 A-B 差异 / 输出字段模板。
+以下为目标平台 `$platform` 的撰写规则，由执行器自动注入对应 `platforms/*.md`。规则按**四个模块**（`meta` / `caption` / `hashtags` / `images`）组织，对齐 `SaveContent` 工具的参数结构。
 
 {{PLATFORM_RULES}}
 
+## 产出方式（强约束）
+
+本 Skill 的最终产出**必须且仅通过一次 `SaveContent` 工具调用**完成；不要把完整文案、hashtags、图片 prompt 以纯文本形式写进对话正文。调用成功后，后端会回传一条带 `content_id` 的 CARD，前端据此渲染预览。
+
+- **必填模块**：`caption`（`body` 非空）、`images`（`style` + `aspect_ratio` + `items[]`，数量与角色遵循平台规则）
+- **强烈建议填写**：`meta`（小红书需要 `title`）、`hashtags`（按平台规则控制数量与位置）
+- **禁止**：在工具参数里传 `platform` / `creative_id` / `session_id`（后端自动注入）；把同一帖子发多次 `SaveContent`
+- **变体（可选）**：若用户要求 A/B 两版，主版放 `caption.body`，备选版放 `caption.variants[{label, body}]`；图片 prompts 仍只给一套
+- **合规与披露**：在 `caption.body` 里按平台规定处理（IG `#ad`、小红书蒲公英报备等）；不要把披露放到 `meta.cta`
+
+## 通用撰写规则
+
+1. 贴合 KOL 的 `positioning` / `tone_tags` / `voice`，**第一人称**；避免"官方口径"
+2. 只使用 Brief 明示的卖点与事实；不承诺未列出的功效 / 数据
+3. 严格遵守 KOL 的 `no_go_list` 与 Brief 合规要求；涉及医疗、功效、绝对化用词自行合规化
+4. 不贬低竞品
+5. `images.style` 与每张图的 `prompt` 要与 `caption.body` 的场景/情绪一致；`prompt` 要包含**主体 / 场景 / 光线 / 构图 / 风格**等可执行的视觉要素，不得只有"好看的封面"这类空描述
+
 ## 工作流程
 
-1. **核对 Context**：确认 `KOL_PERSONA_CORE` / `BRIEF_FULL` / `PLATFORM_RULES` 三块均已注入且关键字段齐全（如 Brief 的 `core_message` / 卖点，KOL 的 `tone_tags` / `voice`）。若明显缺失，**列出缺失项向用户确认**，不要编造；用户明示"按你理解补"后，再生成并在"备注"中标注【假设】
+1. **核对 Context**：确认 `KOL_PERSONA_CORE` / `BRIEF_FULL` / `PLATFORM_RULES` 三块均已注入且关键字段齐全（Brief 的 `core_message` / 卖点，KOL 的 `tone_tags` / `voice`）。若明显缺失，**列出缺失项向用户确认**，不要编造；用户明示"按你理解补"后，再生成并在工具调用前向用户说明哪些是【假设】
 2. **抽取要点**：从 Brief 萃取 3 条最能撑起核心卖点的支撑点；从 KOL `voice` / `content_preference` 抽取 2–3 个语言特征（口头禅 / 句式 / 惯用表达）
-3. **按平台生成**：对 `$platforms` 的每个平台，依据"平台规则"段中该平台的"输出字段"模板各给 2 版（A 稳 / B 钩子）
-4. **自检**：每版对照 KOL `no_go_list`、Brief 合规项与该平台规则做一次回扫，违规直接改写
+3. **构图规划**：依据平台规则确定 `images.items[]` 的数量与角色（cover / content / closing），为每张图写 detailed prompt
+4. **自检**：对照 KOL `no_go_list`、Brief 合规项与平台规则做一次回扫，违规直接改写
+5. **一次性调用 `SaveContent`**：把 `meta` / `caption` / `hashtags` / `images` 装配后发起工具调用
 
-## 收尾
+## 工具调用后的回复
 
-所有平台输出完成后，附**一段** 3–5 行的 `改写说明`：为什么这样切入、版本 A / B 差异、哪些点基于【假设】。
+`SaveContent` 返回后，**不要**再把正文、hashtags 或图片 prompt 原样重复贴在对话里（前端已通过 CARD 展示）。只用**一行中文短句**致意即可，例如：
+
+> 已生成并落库，版本 v3（#248）。如需改某处，告诉我调哪块即可。
+
+若用户接下来要求修改，按差异更新后再次调用 `SaveContent`（后端会自动把上一版作为 `parent_version_id`）。
