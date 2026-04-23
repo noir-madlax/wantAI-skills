@@ -9,6 +9,9 @@ preload:
   - name: KOL_PERSONA_CORE
     loader: kol_persona_core
     args: { kol_id: "$kol_id" }
+  - name: KOL_REFERENCE_POSTS
+    loader: kol_reference_posts
+    args: { kol_id: "$kol_id" }
   - name: BRIEF_FULL
     loader: brief_full
     args: { brief_id: "$brief_id" }
@@ -29,6 +32,9 @@ preload:
 
 ### KOL 人设
 {{KOL_PERSONA_CORE}}
+
+### KOL 历史高赞帖（few-shot 参考）
+{{KOL_REFERENCE_POSTS}}
 
 ### Brief
 {{BRIEF_FULL}}
@@ -71,12 +77,13 @@ preload:
 3. 严格遵守 KOL 的 `no_go_list` 与 Brief 合规要求；涉及医疗、功效、绝对化用词自行合规化
 4. 不贬低竞品
 5. `images.style` 与每张图的 `prompt` 要与 `caption.body` 的场景/情绪一致；`prompt` 要包含**主体 / 场景 / 光线 / 构图 / 风格**等可执行的视觉要素，不得只有"好看的封面"这类空描述
+6. 图片风格必须以 `KOL_PERSONA_CORE.visual_style` 为主骨架（色调 / 构图 / 主体偏好 / 滤镜 / 封面设计 / 文字叠加习惯），并结合 `KOL_REFERENCE_POSTS` 中高赞样本的 `why_selected` 作为佐证；禁止凭空另造一套与该博主历史视觉无关的风格
 
 ## 工作流程
 
-1. **核对 Context**：确认 `KOL_PERSONA_CORE` / `BRIEF_FULL` / `PLATFORM_RULES` 三块均已注入且关键字段齐全（Brief 的 `core_message` / 卖点，KOL 的 `tone_tags` / `voice`）。若明显缺失，**列出缺失项向用户确认**，不要编造；用户明示"按你理解补"后，再生成并在工具调用前向用户说明哪些是【假设】
-2. **抽取要点**：从 Brief 萃取 3 条最能撑起核心卖点的支撑点；从 KOL `voice` / `content_preference` 抽取 2–3 个语言特征（口头禅 / 句式 / 惯用表达）
-3. **构图规划**：依据平台规则确定 `images.items[]` 的数量与角色（cover / content / closing），为每张图写 detailed prompt
+1. **核对 Context**：确认 `KOL_PERSONA_CORE` / `KOL_REFERENCE_POSTS` / `BRIEF_FULL` / `PLATFORM_RULES` 四块均已注入且关键字段齐全（Brief 的 `core_message` / 卖点，KOL 的 `tone_tags` / `voice` / `visual_style`）。若明显缺失，**列出缺失项向用户确认**，不要编造；用户明示"按你理解补"后，再生成并在工具调用前向用户说明哪些是【假设】
+2. **抽取要点**：从 Brief 萃取 3 条最能撑起核心卖点的支撑点；从 KOL `voice` / `content_preference` / `decision_heuristics` 抽取 2–3 个语言特征与选题/结构规则（口头禅 / 句式 / 惯用开场 / 典型结构）；参考 `KOL_REFERENCE_POSTS` 中互动最高的条目的 `why_selected`，确认本次选题与博主历史爆款的契合点
+3. **构图规划**：依据平台规则确定 `images.items[]` 的数量与角色（cover / content / closing），并把 `visual_style` 的 `color_palette` / `composition` / `subject_focus` / `filter_or_editing` / `cover_design` / `text_overlay_habit` 转译成每张图 prompt 里的具体视觉语言（例如 "胶片颗粒 + 暖黄生活流" → prompt 里明写 `warm golden hour, fine film grain, muted pastel palette`）；封面的文字叠加风格须匹配 `text_overlay_habit` 与 `cover_design`
 4. **自检**：对照 KOL `no_go_list`、Brief 合规项与平台规则做一次回扫，违规直接改写
 5. **一次性调用 `SaveContent`**：把 `meta` / `caption` / `hashtags` / `images` 装配成单个 `content` 对象，作为工具的 `content` 入参发起调用
 
