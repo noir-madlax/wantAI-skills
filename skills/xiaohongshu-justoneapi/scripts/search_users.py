@@ -10,6 +10,7 @@
 # 示例：uv run search_users.py 美妆博主 5
 
 import csv
+import json
 import os
 import sys
 import time
@@ -17,6 +18,8 @@ from datetime import datetime
 from pathlib import Path
 
 import requests
+
+DATA_SOURCE = "justoneapi"
 
 # ── Token 加载 ──────────────────────────────────────────────
 def find_env_token():
@@ -87,17 +90,33 @@ def fetch_page(token, keyword, page):
 
 # ── CSV 写入 ─────────────────────────────────────────────────
 CSV_COLUMNS = [
-    "id", "name", "red_id", "desc", "sub_title",
-    "red_official_verified", "red_official_verify_type",
-    "image", "link",
+    "xhs_user_id", "red_id", "nickname", "bio", "subtitle",
+    "is_official_verified", "official_verify_type",
+    "avatar_url", "profile_url",
+    "data_source", "raw_data",
 ]
+
+def user_to_row(user: dict) -> dict:
+    return {
+        "xhs_user_id":          user.get("id", ""),
+        "red_id":               user.get("red_id", ""),
+        "nickname":             user.get("name", ""),
+        "bio":                  user.get("desc", ""),
+        "subtitle":             user.get("sub_title", ""),
+        "is_official_verified": user.get("red_official_verified", False),
+        "official_verify_type": user.get("red_official_verify_type", ""),
+        "avatar_url":           user.get("image", ""),
+        "profile_url":          user.get("link", ""),
+        "data_source":          DATA_SOURCE,
+        "raw_data":             json.dumps(user, ensure_ascii=False),
+    }
 
 def write_csv(users, filepath, write_header):
     with open(filepath, "a", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS, extrasaction="ignore")
         if write_header:
             writer.writeheader()
-        writer.writerows(users)
+        writer.writerows(user_to_row(u) for u in users)
 
 # ── 主流程 ───────────────────────────────────────────────────
 def crawl(keyword, max_pages=None, output_dir: Path = Path(".")):

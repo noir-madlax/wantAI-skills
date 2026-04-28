@@ -10,6 +10,7 @@
 # 示例：uv run search_notes.py 美妆 10 --sort popularity_descending --note-type _1 --output-dir ./output
 
 import csv
+import json
 import os
 import sys
 import time
@@ -144,10 +145,10 @@ def fetch_page(token: str, keyword: str, page: int, sort: str, note_type: str) -
 # ── CSV 写入 ─────────────────────────────────────────────────
 CSV_COLUMNS = [
     "note_id", "type", "timestamp", "timestamp_fmt",
-    "title", "desc",
+    "title", "description",
     "author_userid", "author_nickname", "author_red_id",
     "liked_count", "comments_count", "collected_count", "shared_count",
-    "cover_url",
+    "cover_url", "raw_data",
 ]
 
 def note_to_row(note: dict) -> dict:
@@ -164,7 +165,7 @@ def note_to_row(note: dict) -> dict:
         "timestamp":       ts,
         "timestamp_fmt":   datetime.fromtimestamp(int(ts)).strftime("%Y-%m-%d %H:%M:%S") if ts else "",
         "title":           note.get("title") or note.get("abstract_show", ""),
-        "desc":            note.get("desc", ""),
+        "description":     note.get("desc", ""),
         "author_userid":   user.get("userid", ""),
         "author_nickname": user.get("nickname", ""),
         "author_red_id":   user.get("red_id", ""),
@@ -173,6 +174,7 @@ def note_to_row(note: dict) -> dict:
         "collected_count": note.get("collected_count", ""),
         "shared_count":    note.get("shared_count", ""),
         "cover_url":       cover,
+        "raw_data":        json.dumps(note, ensure_ascii=False),
     }
 
 def write_csv(rows: list, filepath: Path, write_header: bool):
