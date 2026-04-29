@@ -5,8 +5,8 @@
 # ]
 # ///
 #
-# xhs_search_users.py —— 小红书用户搜索，结果落地为 CSV
-# 用法：uv run search_users.py <keyword> [max_pages]
+# xhs_search_users.py —— 小红书用户搜索，结果落地为 CSV，并 upsert 到 GoodGame 后端
+# 用法：uv run search_users.py <keyword> [max_pages] [--output-dir DIR] [--no-upload]
 # 示例：uv run search_users.py 美妆博主 5
 
 import csv
@@ -88,7 +88,7 @@ def fetch_page(token, keyword, page):
 
     raise RuntimeError(f"code=301 采集失败，已重试 {RETRY_MAX} 次")
 
-# ── CSV 写入 ─────────────────────────────────────────────────
+# ── CSV / 后端字段 ───────────────────────────────────────────
 CSV_COLUMNS = [
     "xhs_user_id", "red_id", "nickname", "bio", "subtitle",
     "is_official_verified", "official_verify_type",
@@ -96,7 +96,14 @@ CSV_COLUMNS = [
     "data_source", "raw_data",
 ]
 
+def _safe_int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
 def user_to_row(user: dict) -> dict:
+    """raw_data 保留为 dict，便于直接上传后端；写 CSV 时再 dumps。"""
     return {
         "xhs_user_id":          user.get("id", ""),
         "red_id":               user.get("red_id", ""),
@@ -104,27 +111,66 @@ def user_to_row(user: dict) -> dict:
         "bio":                  user.get("desc", ""),
         "subtitle":             user.get("sub_title", ""),
         "is_official_verified": user.get("red_official_verified", False),
-        "official_verify_type": user.get("red_official_verify_type", ""),
+        "official_verify_type": _safe_int(user.get("red_official_verify_type")),
         "avatar_url":           user.get("image", ""),
         "profile_url":          user.get("link", ""),
         "data_source":          DATA_SOURCE,
-        "raw_data":             json.dumps(user, ensure_ascii=False),
+        "raw_data":             user,
     }
 
-def write_csv(users, filepath, write_header):
+def write_csv(rows: list, filepath: Path, write_header: bool):
+    """写入 CSV，raw_data 字段单独 dumps 成字符串。"""
     with open(filepath, "a", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS, extrasaction="ignore")
         if write_header:
             writer.writeheader()
-        writer.writerows(user_to_row(u) for u in users)
+        for r in rows:
+            row = {**r, "raw_data": json.dumps(r["raw_data"], ensure_ascii=False)}
+            writer.writerow(row)
+
+# ── 后端上传 ─────────────────────────────────────────────────
+BACKEND_URL    = "https://www.goodgame.monster/api/skill/xiaohongshu/users/upsert"
+UPLOAD_TIMEOUT = 30
+
+def upload_to_backend(rows: list, trace_id: str, failed_path: Path) -> bool:
+    """单页上传，失败则把整页落到 *_failed.jsonl，跳过继续。"""
+    items = [{k: v for k, v in r.items() if v not in ("", None)} for r in rows]
+    items = [it for it in items if it.get("xhs_user_id")]
+    if not items:
+        return True
+    try:
+        resp = requests.post(
+            BACKEND_URL,
+            json={"trace_id": trace_id, "items": items},
+            timeout=UPLOAD_TIMEOUT,
+        )
+        body = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+        if resp.status_code == 200 and body.get("code") == 0:
+            print(f"  ↑ 上传 {body.get('data', {}).get('count', 0)} 条")
+            return True
+        print(f"  ⚠️ 上传失败 HTTP={resp.status_code} body={body}")
+    except Exception as e:
+        print(f"  ⚠️ 上传异常: {e}")
+
+    with open(failed_path, "a", encoding="utf-8") as f:
+        for it in items:
+            f.write(json.dumps(it, ensure_ascii=False, default=str) + "\n")
+    return False
 
 # ── 主流程 ───────────────────────────────────────────────────
-def crawl(keyword, max_pages=None, output_dir: Path = Path(".")):
+def crawl(keyword, max_pages, output_dir: Path, no_upload: bool):
     token    = load_token()
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir.mkdir(parents=True, exist_ok=True)
-    filepath = output_dir / f"xhs_users_{keyword}_{ts}.csv"
-    total    = 0
+    filepath    = output_dir / f"xhs_users_{keyword}_{ts}.csv"
+    failed_path = output_dir / f"xhs_users_{keyword}_{ts}_failed.jsonl"
+    trace_id    = f"xhs_users_{keyword}_{ts}"
+    total       = 0
+
+    print(
+        f"关键词: {keyword} | 最多: {max_pages or '∞'} 页"
+        f"{' | 上传: 关闭' if no_upload else ''}"
+    )
 
     for page in range(1, (max_pages or 9999) + 1):
         print(f"采集第 {page} 页...", end=" ", flush=True)
@@ -134,9 +180,13 @@ def crawl(keyword, max_pages=None, output_dir: Path = Path(".")):
             print("已到末页。")
             break
 
-        write_csv(users, filepath, write_header=(page == 1))
-        total += len(users)
-        print(f"{len(users)} 条（累计 {total} 条）")
+        rows = [user_to_row(u) for u in users]
+        write_csv(rows, filepath, write_header=(page == 1))
+        total += len(rows)
+        print(f"{len(rows)} 条（累计 {total} 条）")
+
+        if not no_upload:
+            upload_to_backend(rows, trace_id, failed_path)
 
         if max_pages and page >= max_pages:
             break
@@ -150,5 +200,7 @@ if __name__ == "__main__":
     ap.add_argument("keyword", help="搜索关键词")
     ap.add_argument("max_pages", nargs="?", type=int, help="最大采集页数")
     ap.add_argument("--output-dir", default="search_logs", help="输出目录（默认 search_logs）")
+    ap.add_argument("--no-upload", action="store_true",
+                    help="只写本地 CSV，不调用后端 upsert 接口")
     args = ap.parse_args()
-    crawl(args.keyword, args.max_pages, Path(args.output_dir))
+    crawl(args.keyword, args.max_pages, Path(args.output_dir), args.no_upload)

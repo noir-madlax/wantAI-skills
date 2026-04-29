@@ -5,8 +5,8 @@
 # ]
 # ///
 #
-# search_notes.py —— 小红书笔记搜索，结果落地为 CSV
-# 用法：uv run search_notes.py <keyword> <max_pages> [--sort SORT] [--note-type TYPE] [--output-dir DIR]
+# search_notes.py —— 小红书笔记搜索，结果落地为 CSV，并 upsert 到 GoodGame 后端
+# 用法：uv run search_notes.py <keyword> <max_pages> [--sort SORT] [--note-type TYPE] [--output-dir DIR] [--no-upload]
 # 示例：uv run search_notes.py 美妆 10 --sort popularity_descending --note-type _1 --output-dir ./output
 
 import csv
@@ -142,7 +142,7 @@ def fetch_page(token: str, keyword: str, page: int, sort: str, note_type: str) -
 
     raise RuntimeError(f"接口持续失败，已重试 {RETRY_MAX} 次，请稍后再试")
 
-# ── CSV 写入 ─────────────────────────────────────────────────
+# ── CSV / 后端字段 ───────────────────────────────────────────
 CSV_COLUMNS = [
     "note_id", "type", "timestamp", "timestamp_fmt",
     "title", "description",
@@ -151,10 +151,17 @@ CSV_COLUMNS = [
     "cover_url", "raw_data",
 ]
 
+def _safe_int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
 def note_to_row(note: dict) -> dict:
+    """raw_data 保留为 dict，便于直接上传后端；写 CSV 时再 dumps。"""
     user = note.get("user") or {}
     imgs = note.get("images_list") or []
-    ts   = note.get("timestamp", 0)
+    ts   = _safe_int(note.get("timestamp"))
     cover = next(
         (img.get("url") or img.get("url_size_large", "") for img in imgs if img),
         "",
@@ -163,38 +170,70 @@ def note_to_row(note: dict) -> dict:
         "note_id":         note.get("id", ""),
         "type":            note.get("type", ""),
         "timestamp":       ts,
-        "timestamp_fmt":   datetime.fromtimestamp(int(ts)).strftime("%Y-%m-%d %H:%M:%S") if ts else "",
+        "timestamp_fmt":   datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S") if ts else "",
         "title":           note.get("title") or note.get("abstract_show", ""),
         "description":     note.get("desc", ""),
         "author_userid":   user.get("userid", ""),
         "author_nickname": user.get("nickname", ""),
         "author_red_id":   user.get("red_id", ""),
-        "liked_count":     note.get("liked_count", ""),
-        "comments_count":  note.get("comments_count", ""),
-        "collected_count": note.get("collected_count", ""),
-        "shared_count":    note.get("shared_count", ""),
+        "liked_count":     _safe_int(note.get("liked_count")),
+        "comments_count":  _safe_int(note.get("comments_count")),
+        "collected_count": _safe_int(note.get("collected_count")),
+        "shared_count":    _safe_int(note.get("shared_count")),
         "cover_url":       cover,
-        "raw_data":        json.dumps(note, ensure_ascii=False),
+        "raw_data":        note,
     }
 
 def write_csv(rows: list, filepath: Path, write_header: bool):
+    """写入 CSV，raw_data 字段单独 dumps 成字符串。"""
     with open(filepath, "a", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS, extrasaction="ignore")
         if write_header:
             writer.writeheader()
-        writer.writerows(rows)
+        for r in rows:
+            row = {**r, "raw_data": json.dumps(r["raw_data"], ensure_ascii=False)}
+            writer.writerow(row)
+
+# ── 后端上传 ─────────────────────────────────────────────────
+BACKEND_URL    = "https://www.goodgame.monster/api/skill/xiaohongshu/notes/upsert"
+UPLOAD_TIMEOUT = 30
+
+def upload_to_backend(rows: list, trace_id: str, failed_path: Path) -> bool:
+    """单页上传，失败则把整页落到 *_failed.jsonl，跳过继续。"""
+    items = [{k: v for k, v in r.items() if v not in ("", None)} for r in rows]
+    try:
+        resp = requests.post(
+            BACKEND_URL,
+            json={"trace_id": trace_id, "items": items},
+            timeout=UPLOAD_TIMEOUT,
+        )
+        body = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+        if resp.status_code == 200 and body.get("code") == 0:
+            print(f"  ↑ 上传 {body.get('data', {}).get('count', 0)} 条")
+            return True
+        print(f"  ⚠️ 上传失败 HTTP={resp.status_code} body={body}")
+    except Exception as e:
+        print(f"  ⚠️ 上传异常: {e}")
+
+    with open(failed_path, "a", encoding="utf-8") as f:
+        for it in items:
+            f.write(json.dumps(it, ensure_ascii=False, default=str) + "\n")
+    return False
 
 # ── 主流程 ───────────────────────────────────────────────────
-def crawl(keyword: str, max_pages: int, sort: str, note_type: str, output_dir: Path):
+def crawl(keyword: str, max_pages: int, sort: str, note_type: str, output_dir: Path, no_upload: bool):
     token    = load_token()
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir.mkdir(parents=True, exist_ok=True)
-    filepath = output_dir / f"xhs_notes_{keyword}_{sort}_{ts}.csv"
-    total    = 0
+    filepath    = output_dir / f"xhs_notes_{keyword}_{sort}_{ts}.csv"
+    failed_path = output_dir / f"xhs_notes_{keyword}_{sort}_{ts}_failed.jsonl"
+    trace_id    = f"xhs_notes_{keyword}_{ts}"
+    total       = 0
 
     print(
         f"关键词: {keyword} | 排序: {SORT_CHOICES[sort]} "
         f"| 类型: {NOTE_TYPE_CHOICES[note_type]} | 最多: {max_pages} 页"
+        f"{' | 上传: 关闭' if no_upload else ''}"
     )
 
     for page in range(1, max_pages + 1):
@@ -209,6 +248,9 @@ def crawl(keyword: str, max_pages: int, sort: str, note_type: str, output_dir: P
         write_csv(rows, filepath, write_header=(page == 1))
         total += len(rows)
         print(f"{len(rows)} 条（累计 {total} 条）")
+
+        if not no_upload:
+            upload_to_backend(rows, trace_id, failed_path)
 
         if page < max_pages:
             time.sleep(PAGE_SLEEP)
@@ -238,9 +280,12 @@ if __name__ == "__main__":
     )
     ap.add_argument("--output-dir", default="search_logs",
                     help="输出目录（默认 search_logs）")
+    ap.add_argument("--no-upload", action="store_true",
+                    help="只写本地 CSV，不调用后端 upsert 接口")
     args = ap.parse_args()
 
     try:
-        crawl(args.keyword, args.max_pages, args.sort, args.note_type, Path(args.output_dir))
+        crawl(args.keyword, args.max_pages, args.sort, args.note_type,
+              Path(args.output_dir), args.no_upload)
     except RuntimeError as e:
         sys.exit(f"❌ {e}")

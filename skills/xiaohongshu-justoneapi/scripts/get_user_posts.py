@@ -2,14 +2,16 @@
 # requires-python = ">=3.9"
 # dependencies = ["requests"]
 # ///
-# get_user_posts.py —— 抓取小红书用户笔记列表，支持多用户、断点续传、时间过滤
-# 用法：uv run get_user_posts.py <user_id> [user_id2 ...] [--output-dir DIR] [--since YYYY-MM-DD] [--workers N]
+# get_user_posts.py —— 抓取小红书用户笔记列表，每页先 upsert 到 GoodGame 后端，再落 CSV
+# 用法：uv run get_user_posts.py <user_id> [user_id2 ...] [--output-dir DIR] [--since YYYY-MM-DD] [--workers N] [--no-upload]
 # 示例：uv run get_user_posts.py 5b33a8556b58b74911b89949 --output-dir ./output --since 2025-01-01
 
 import argparse, csv, json, os, sys, threading, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from typing import Optional
 import requests
 
 # ── Token ─────────────────────────────────────────────────────
@@ -42,12 +44,55 @@ CSV_COLUMNS = [
     "cover_url", "raw_json",
 ]
 
+# ── 后端上传配置 ──────────────────────────────────────────────
+BACKEND_URL    = "https://www.goodgame.monster/api/skill/xiaohongshu/notes/upsert"
+UPLOAD_TIMEOUT = 30
+
+# CSV 列名 → 后端 schema 字段名（含义相同，名称不同）
+UPLOAD_FIELD_MAP = {
+    "note_id":         "note_id",
+    "create_time":     "timestamp",
+    "create_time_fmt": "timestamp_fmt",
+    "title":           "title",
+    "desc":            "description",
+    "type":            "type",
+    "author_userid":   "author_userid",
+    "author_nickname": "author_nickname",
+    "likes":           "liked_count",
+    "comments_count":  "comments_count",
+    "collected_count": "collected_count",
+    "share_count":     "shared_count",
+    "cover_url":       "cover_url",
+    "raw_json":        "raw_data",
+}
+INT_FIELDS = {"timestamp", "liked_count", "comments_count", "collected_count", "shared_count"}
+
 # ── 工具函数 ──────────────────────────────────────────────────
 def fmt_cst(ts) -> str:
     try:
         return datetime.fromtimestamp(int(ts), tz=_CST).strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
         return str(ts)
+
+def _safe_int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+def to_upload_item(row: dict) -> dict:
+    """CSV 行 → 后端 schema item：字段映射 + 类型转换 + 空值剔除。"""
+    out = {}
+    for src, dst in UPLOAD_FIELD_MAP.items():
+        v = row.get(src)
+        if v in ("", None):
+            continue
+        if dst in INT_FIELDS:
+            v = _safe_int(v)
+            if v is None:
+                continue
+        out[dst] = v
+    return out
 
 def load_seen(csv_file: Path) -> set:
     if not (csv_file.exists() and csv_file.stat().st_size > 0):
@@ -84,15 +129,53 @@ def fetch_page(token: str, user_id: str, last_cursor: str = "") -> dict | None:
             time.sleep(RETRY_SLEEP)
     return None
 
+# ── 上下文 ────────────────────────────────────────────────────
+@dataclass
+class Ctx:
+    token: str
+    since_ts: Optional[int]
+    writer: csv.DictWriter
+    fp: object
+    csv_lock: threading.Lock
+    seen_ids: set
+    progress: dict
+    pfile: Path
+    prog_lock: threading.Lock
+    trace_id: str
+    failed_path: Path
+    failed_lock: threading.Lock
+    no_upload: bool
+
+# ── 后端上传 ──────────────────────────────────────────────────
+def upload_to_backend(rows: list, ctx: Ctx) -> bool:
+    """单页上传，失败则把整页落到 *_failed.jsonl，跳过继续。"""
+    items = [to_upload_item(r) for r in rows]
+    items = [it for it in items if it.get("note_id")]
+    if not items:
+        return True
+    try:
+        resp = requests.post(
+            BACKEND_URL,
+            json={"trace_id": ctx.trace_id, "items": items},
+            timeout=UPLOAD_TIMEOUT,
+        )
+        body = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+        if resp.status_code == 200 and body.get("code") == 0:
+            print(f"  ↑ 上传到后端 {body.get('data', {}).get('count', 0)} 条")
+            return True
+        print(f"  ⚠️ 上传到后端失败 HTTP={resp.status_code} body={body}")
+    except Exception as e:
+        print(f"  ⚠️ 上传到后端异常: {e}")
+
+    with ctx.failed_lock, open(ctx.failed_path, "a", encoding="utf-8") as f:
+        for it in items:
+            f.write(json.dumps(it, ensure_ascii=False, default=str) + "\n")
+    return False
+
 # ── 单用户抓取 ────────────────────────────────────────────────
-def fetch_user(
-    token: str, user_id: str, since_ts: int | None,
-    writer: csv.DictWriter, f,
-    csv_lock: threading.Lock, seen_ids: set,
-    progress: dict, pfile: Path, prog_lock: threading.Lock,
-) -> bool:
-    with prog_lock:
-        state = progress.get(user_id, {})
+def fetch_user(ctx: Ctx, user_id: str) -> bool:
+    with ctx.prog_lock:
+        state = ctx.progress.get(user_id, {})
     cursor = state.get("cursor", "")
     page   = state.get("page", 1)
     total  = state.get("total", 0)
@@ -103,7 +186,7 @@ def fetch_user(
         print(f"[{tag}] 开始抓取")
 
     while True:
-        data = fetch_page(token, user_id, cursor)
+        data = fetch_page(ctx.token, user_id, cursor)
         if data is None:
             print(f"[{tag}] 请求失败，中止（下次续传）")
             return False
@@ -115,7 +198,7 @@ def fetch_user(
         rows, hit_cutoff = [], False
         for note in notes:
             ct = note.get("create_time", 0)
-            if since_ts and ct and int(ct) < since_ts:
+            if ctx.since_ts and ct and int(ct) < ctx.since_ts:
                 hit_cutoff = True
                 continue
             u = note.get("user") or {}
@@ -136,28 +219,38 @@ def fetch_user(
                 "collected_count": note.get("collected_count", ""),
                 "share_count": note.get("share_count", ""),
                 "cover_url": imgs[0].get("url", "") if imgs else "",
-                "raw_json": json.dumps(note, ensure_ascii=False),
+                "raw_json": note,  # 内存中保留 dict，写 CSV 时再 dumps
             })
 
         next_cursor = notes[-1].get("cursor", "") if notes else ""
         has_more    = data.get("has_more", False)
 
-        with csv_lock:
-            new = [r for r in rows if r["note_id"] not in seen_ids]
+        # 1) 锁内：去重，标记已见
+        with ctx.csv_lock:
+            new = [r for r in rows if r["note_id"] not in ctx.seen_ids]
             for r in new:
-                seen_ids.add(r["note_id"])
-            writer.writerows(new)
-            f.flush()
+                ctx.seen_ids.add(r["note_id"])
+
+        # 2) 锁外：先上传，再写 CSV（顺序：upload → csv）
+        if new:
+            if not ctx.no_upload:
+                upload_to_backend(new, ctx)
+            with ctx.csv_lock:
+                for r in new:
+                    csv_row = {**r, "raw_json": json.dumps(r["raw_json"], ensure_ascii=False)}
+                    ctx.writer.writerow(csv_row)
+                ctx.fp.flush()
+
         total += len(new)
         print(f"[{tag}] 第{page}页 新增{len(new)}条 累计{total}条")
 
         page += 1
-        with prog_lock:
+        with ctx.prog_lock:
             if has_more and next_cursor and not hit_cutoff:
-                progress[user_id] = {"cursor": next_cursor, "page": page, "total": total}
+                ctx.progress[user_id] = {"cursor": next_cursor, "page": page, "total": total}
             else:
-                progress.pop(user_id, None)
-            save_progress(pfile, progress)
+                ctx.progress.pop(user_id, None)
+            save_progress(ctx.pfile, ctx.progress)
 
         if hit_cutoff or not has_more or not next_cursor:
             break
@@ -174,6 +267,8 @@ def main():
     ap.add_argument("--output-dir", default="search_logs", help="输出目录（默认 search_logs）")
     ap.add_argument("--since", help="只采集此日期之后的笔记，格式 YYYY-MM-DD（CST）")
     ap.add_argument("--workers", type=int, default=3, help="并发线程数（默认 3）")
+    ap.add_argument("--no-upload", action="store_true",
+                    help="只写本地 CSV，不调用后端 upsert 接口")
     args = ap.parse_args()
 
     token = load_token()
@@ -184,16 +279,18 @@ def main():
 
     out_dir  = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    csv_file = out_dir / "xhs_posts.csv"
-    pfile    = out_dir / ".xhs_posts_progress.json"
-    progress = load_progress(pfile)
-    seen_ids = load_seen(csv_file)
+    csv_file    = out_dir / "xhs_posts.csv"
+    pfile       = out_dir / ".xhs_posts_progress.json"
+    failed_path = out_dir / "xhs_posts_failed.jsonl"
+    trace_id    = f"xhs_posts_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    progress    = load_progress(pfile)
+    seen_ids    = load_seen(csv_file)
     file_exists = csv_file.exists() and csv_file.stat().st_size > 0
 
-    csv_lock  = threading.Lock()
-    prog_lock = threading.Lock()
-
-    print(f"用户数: {len(args.user_ids)}  并发: {args.workers}  输出: {csv_file}")
+    print(
+        f"用户数: {len(args.user_ids)}  并发: {args.workers}  输出: {csv_file}"
+        f"{' | 上传: 关闭' if args.no_upload else ''}"
+    )
     if since_ts:
         print(f"只采集 {args.since} 之后的笔记")
 
@@ -202,15 +299,21 @@ def main():
         if not file_exists:
             writer.writeheader()
 
+        ctx = Ctx(
+            token=token, since_ts=since_ts,
+            writer=writer, fp=f,
+            csv_lock=threading.Lock(), seen_ids=seen_ids,
+            progress=progress, pfile=pfile, prog_lock=threading.Lock(),
+            trace_id=trace_id, failed_path=failed_path, failed_lock=threading.Lock(),
+            no_upload=args.no_upload,
+        )
+
         def run(uid: str):
-            ok = fetch_user(
-                token, uid, since_ts, writer, f,
-                csv_lock, seen_ids, progress, pfile, prog_lock,
-            )
+            ok = fetch_user(ctx, uid)
             if ok:
-                with prog_lock:
-                    progress.pop(uid, None)
-                    save_progress(pfile, progress)
+                with ctx.prog_lock:
+                    ctx.progress.pop(uid, None)
+                    save_progress(ctx.pfile, ctx.progress)
 
         with ThreadPoolExecutor(max_workers=args.workers) as pool:
             for fut in as_completed({pool.submit(run, uid): uid for uid in args.user_ids}):
