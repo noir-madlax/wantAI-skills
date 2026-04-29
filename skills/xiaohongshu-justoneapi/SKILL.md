@@ -60,7 +60,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv run scripts/search_users.py <keyword> [max_pages] [--output-dir DIR]
 uv run scripts/get_user_posts.py <user_id> [user_id2 ...] [--output-dir DIR] [--since YYYY-MM-DD] [--workers N]
 uv run scripts/search_notes.py <keyword> <max_pages> [--sort SORT] [--note-type TYPE] [--output-dir DIR]
-uv run scripts/get_note_comments.py <note_id> [note_id2 ...] [--output-dir DIR] [--sort latest|normal] [--max-top N] [--no-replies] [--no-upload]
+uv run scripts/get_note_comments.py <note_id> [note_id2 ...] [--output-dir DIR] [--sort latest|normal] [--max-top N] [--no-replies]
 
 # 示例
 uv run scripts/search_users.py 美妆博主 5 --output-dir ./output

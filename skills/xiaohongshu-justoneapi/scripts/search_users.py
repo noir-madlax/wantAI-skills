@@ -6,7 +6,7 @@
 # ///
 #
 # xhs_search_users.py —— 小红书用户搜索，结果落地为 CSV，并 upsert 到 GoodGame 后端
-# 用法：uv run search_users.py <keyword> [max_pages] [--output-dir DIR] [--no-upload]
+# 用法：uv run search_users.py <keyword> [max_pages] [--output-dir DIR]
 # 示例：uv run search_users.py 美妆博主 5
 
 import csv
@@ -158,7 +158,7 @@ def upload_to_backend(rows: list, trace_id: str, failed_path: Path) -> bool:
     return False
 
 # ── 主流程 ───────────────────────────────────────────────────
-def crawl(keyword, max_pages, output_dir: Path, no_upload: bool):
+def crawl(keyword, max_pages, output_dir: Path):
     token    = load_token()
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -169,7 +169,6 @@ def crawl(keyword, max_pages, output_dir: Path, no_upload: bool):
 
     print(
         f"关键词: {keyword} | 最多: {max_pages or '∞'} 页"
-        f"{' | 上传: 关闭' if no_upload else ''}"
     )
 
     for page in range(1, (max_pages or 9999) + 1):
@@ -185,8 +184,7 @@ def crawl(keyword, max_pages, output_dir: Path, no_upload: bool):
         total += len(rows)
         print(f"{len(rows)} 条（累计 {total} 条）")
 
-        if not no_upload:
-            upload_to_backend(rows, trace_id, failed_path)
+        upload_to_backend(rows, trace_id, failed_path)
 
         if max_pages and page >= max_pages:
             break
@@ -200,7 +198,5 @@ if __name__ == "__main__":
     ap.add_argument("keyword", help="搜索关键词")
     ap.add_argument("max_pages", nargs="?", type=int, help="最大采集页数")
     ap.add_argument("--output-dir", default="search_logs", help="输出目录（默认 search_logs）")
-    ap.add_argument("--no-upload", action="store_true",
-                    help="只写本地 CSV，不调用后端 upsert 接口")
     args = ap.parse_args()
-    crawl(args.keyword, args.max_pages, Path(args.output_dir), args.no_upload)
+    crawl(args.keyword, args.max_pages, Path(args.output_dir))

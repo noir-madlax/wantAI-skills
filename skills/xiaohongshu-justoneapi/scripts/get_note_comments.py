@@ -3,7 +3,7 @@
 # dependencies = ["requests"]
 # ///
 # get_note_comments.py —— 抓取小红书笔记评论（顶层 + 回复），每页 upsert 到 GoodGame 后端，再落 CSV
-# 用法：uv run get_note_comments.py <note_id> [note_id2 ...] [--output-dir DIR] [--sort latest|normal] [--no-replies] [--no-upload]
+# 用法：uv run get_note_comments.py <note_id> [note_id2 ...] [--output-dir DIR] [--sort latest|normal] [--no-replies]
 # 示例：uv run get_note_comments.py 65bf5360000000002c03f684 --output-dir ./output
 # 断点续爬：进度写入 .xhs_comments_progress.json，CSV 固定文件名追加；中断后再次运行同命令即可续传
 
@@ -127,7 +127,6 @@ class Ctx:
     token: str
     sort: str
     include_replies: bool
-    no_upload: bool
     writer: csv.DictWriter
     fp: object
     seen: set
@@ -264,8 +263,7 @@ def _persist(rows: list, ctx: Ctx) -> int:
         new.append(r)
     if not new:
         return 0
-    if not ctx.no_upload:
-        upload_to_backend(new, ctx.trace_id, ctx.failed_path)
+    upload_to_backend(new, ctx.trace_id, ctx.failed_path)
     write_csv(new, ctx.fp, ctx.writer)
     return len(new)
 
@@ -430,8 +428,6 @@ def main():
                     help="顶层评论排序：latest（最新，默认）| normal（默认排序）")
     ap.add_argument("--no-replies", action="store_true",
                     help="只采集顶层评论，不拉取每条评论的回复")
-    ap.add_argument("--no-upload", action="store_true",
-                    help="只写本地 CSV，不调用后端 upsert 接口")
     ap.add_argument("--max-top", type=int, default=None,
                     help="本次运行最多新增的顶层评论数（与历史进度无关；达到后停止翻新顶层，但子评论仍会拉完）")
     args = ap.parse_args()
@@ -450,8 +446,7 @@ def main():
 
     print(f"笔记数: {len(args.note_ids)}  排序: {args.sort}  输出: {csv_file}"
           f"{f' | 本次顶层上限: {args.max_top}' if args.max_top else ''}"
-          f"{' | 回复: 关闭' if args.no_replies else ''}"
-          f"{' | 上传: 关闭' if args.no_upload else ''}")
+          f"{' | 回复: 关闭' if args.no_replies else ''}")
     if progress:
         in_prog = [nid for nid in args.note_ids if nid in progress]
         if in_prog:
@@ -466,7 +461,7 @@ def main():
 
         ctx = Ctx(
             token=token, sort=args.sort,
-            include_replies=not args.no_replies, no_upload=args.no_upload,
+            include_replies=not args.no_replies,
             writer=writer, fp=f, seen=seen,
             progress=progress, pfile=pfile,
             trace_id=trace_id, failed_path=failed_path,

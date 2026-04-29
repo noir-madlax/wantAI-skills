@@ -6,7 +6,7 @@
 # ///
 #
 # search_notes.py —— 小红书笔记搜索，结果落地为 CSV，并 upsert 到 GoodGame 后端
-# 用法：uv run search_notes.py <keyword> <max_pages> [--sort SORT] [--note-type TYPE] [--output-dir DIR] [--no-upload]
+# 用法：uv run search_notes.py <keyword> <max_pages> [--sort SORT] [--note-type TYPE] [--output-dir DIR]
 # 示例：uv run search_notes.py 美妆 10 --sort popularity_descending --note-type _1 --output-dir ./output
 
 import csv
@@ -221,7 +221,7 @@ def upload_to_backend(rows: list, trace_id: str, failed_path: Path) -> bool:
     return False
 
 # ── 主流程 ───────────────────────────────────────────────────
-def crawl(keyword: str, max_pages: int, sort: str, note_type: str, output_dir: Path, no_upload: bool):
+def crawl(keyword: str, max_pages: int, sort: str, note_type: str, output_dir: Path):
     token    = load_token()
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -233,7 +233,6 @@ def crawl(keyword: str, max_pages: int, sort: str, note_type: str, output_dir: P
     print(
         f"关键词: {keyword} | 排序: {SORT_CHOICES[sort]} "
         f"| 类型: {NOTE_TYPE_CHOICES[note_type]} | 最多: {max_pages} 页"
-        f"{' | 上传: 关闭' if no_upload else ''}"
     )
 
     for page in range(1, max_pages + 1):
@@ -249,8 +248,7 @@ def crawl(keyword: str, max_pages: int, sort: str, note_type: str, output_dir: P
         total += len(rows)
         print(f"{len(rows)} 条（累计 {total} 条）")
 
-        if not no_upload:
-            upload_to_backend(rows, trace_id, failed_path)
+        upload_to_backend(rows, trace_id, failed_path)
 
         if page < max_pages:
             time.sleep(PAGE_SLEEP)
@@ -280,12 +278,10 @@ if __name__ == "__main__":
     )
     ap.add_argument("--output-dir", default="search_logs",
                     help="输出目录（默认 search_logs）")
-    ap.add_argument("--no-upload", action="store_true",
-                    help="只写本地 CSV，不调用后端 upsert 接口")
     args = ap.parse_args()
 
     try:
         crawl(args.keyword, args.max_pages, args.sort, args.note_type,
-              Path(args.output_dir), args.no_upload)
+              Path(args.output_dir))
     except RuntimeError as e:
         sys.exit(f"❌ {e}")

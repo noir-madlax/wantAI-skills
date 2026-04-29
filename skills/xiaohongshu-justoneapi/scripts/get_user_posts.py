@@ -3,7 +3,7 @@
 # dependencies = ["requests"]
 # ///
 # get_user_posts.py —— 抓取小红书用户笔记列表，每页先 upsert 到 GoodGame 后端，再落 CSV
-# 用法：uv run get_user_posts.py <user_id> [user_id2 ...] [--output-dir DIR] [--since YYYY-MM-DD] [--workers N] [--no-upload]
+# 用法：uv run get_user_posts.py <user_id> [user_id2 ...] [--output-dir DIR] [--since YYYY-MM-DD] [--workers N]
 # 示例：uv run get_user_posts.py 5b33a8556b58b74911b89949 --output-dir ./output --since 2025-01-01
 
 import argparse, csv, json, os, sys, threading, time
@@ -144,7 +144,6 @@ class Ctx:
     trace_id: str
     failed_path: Path
     failed_lock: threading.Lock
-    no_upload: bool
 
 # ── 后端上传 ──────────────────────────────────────────────────
 def upload_to_backend(rows: list, ctx: Ctx) -> bool:
@@ -233,8 +232,7 @@ def fetch_user(ctx: Ctx, user_id: str) -> bool:
 
         # 2) 锁外：先上传，再写 CSV（顺序：upload → csv）
         if new:
-            if not ctx.no_upload:
-                upload_to_backend(new, ctx)
+            upload_to_backend(new, ctx)
             with ctx.csv_lock:
                 for r in new:
                     csv_row = {**r, "raw_json": json.dumps(r["raw_json"], ensure_ascii=False)}
@@ -267,8 +265,6 @@ def main():
     ap.add_argument("--output-dir", default="search_logs", help="输出目录（默认 search_logs）")
     ap.add_argument("--since", help="只采集此日期之后的笔记，格式 YYYY-MM-DD（CST）")
     ap.add_argument("--workers", type=int, default=3, help="并发线程数（默认 3）")
-    ap.add_argument("--no-upload", action="store_true",
-                    help="只写本地 CSV，不调用后端 upsert 接口")
     args = ap.parse_args()
 
     token = load_token()
@@ -289,7 +285,6 @@ def main():
 
     print(
         f"用户数: {len(args.user_ids)}  并发: {args.workers}  输出: {csv_file}"
-        f"{' | 上传: 关闭' if args.no_upload else ''}"
     )
     if since_ts:
         print(f"只采集 {args.since} 之后的笔记")
@@ -305,7 +300,6 @@ def main():
             csv_lock=threading.Lock(), seen_ids=seen_ids,
             progress=progress, pfile=pfile, prog_lock=threading.Lock(),
             trace_id=trace_id, failed_path=failed_path, failed_lock=threading.Lock(),
-            no_upload=args.no_upload,
         )
 
         def run(uid: str):
