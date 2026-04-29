@@ -13,3 +13,6 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# logs
+search_logs
