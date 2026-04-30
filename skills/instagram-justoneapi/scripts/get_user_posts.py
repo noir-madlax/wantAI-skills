@@ -118,6 +118,10 @@ def _extract_thumb(post: dict) -> str:
     cands = iv.get("candidates") if isinstance(iv, dict) else None
     if cands and isinstance(cands, list):
         return (cands[0] or {}).get("url", "") or ""
+    iv2 = post.get("image_versions") or {}
+    items = iv2.get("items") if isinstance(iv2, dict) else None
+    if items and isinstance(items, list):
+        return (items[0] or {}).get("url", "") or ""
     return ""
 
 def _extract_video(post: dict) -> str:
@@ -240,7 +244,9 @@ def fetch_user(ctx: Ctx, username: str) -> bool:
         if data is None:
             print(f"[{tag}] 请求失败，中止（下次续传）")
             return False
-        posts = _pick(data, "posts", "items", "data", default=[]) or []
+        # IG 实际响应是 body.data.data.items，多包了一层
+        inner = data.get("data") if isinstance(data.get("data"), dict) else data
+        posts = _pick(inner, "items", "posts", default=[]) or []
         if not posts:
             print(f"[{tag}] 无更多数据，完成")
             break
@@ -277,7 +283,10 @@ def fetch_user(ctx: Ctx, username: str) -> bool:
                 "raw_json": post,  # 内存中保留 dict，写 CSV 时再 dumps
             })
 
-        next_cursor = _pick(data, "next_pagination_token", "pagination_token", "next_max_id", "next_min_id") or ""
+        # pagination_token 通常在外层 data 上；兼容内层放置
+        next_cursor = (_pick(data, "pagination_token", "next_pagination_token", "next_max_id", "next_min_id")
+                       or _pick(inner, "pagination_token", "next_pagination_token")
+                       or "")
         more = data.get("more_available")
         has_more = bool(next_cursor) if more is None else bool(more)
 
