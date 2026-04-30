@@ -22,6 +22,7 @@ npx skills add wantAI/wantAI-skills -a cursor -a augment
 | [xiaohongshu-justoneapi](./skills/xiaohongshu-justoneapi/SKILL.md) | 通过 JustOneAPI 采集小红书数据，支持用户搜索、笔记抓取，结果输出为 CSV |
 | [instagram-justoneapi](./skills/instagram-justoneapi/SKILL.md) | 通过 JustOneAPI 采集 Instagram 用户帖子与帖子评论（含回复），结果输出为 CSV 并 upsert 到后端 |
 | [douyin-justoneapi](./skills/douyin-justoneapi/SKILL.md) | 通过 JustOneAPI 采集抖音用户发布视频与视频评论（含回复），结果输出为 CSV 并 upsert 到后端 |
+| [facebook-rapidapi](./skills/facebook-rapidapi/SKILL.md) | 通过 RapidAPI 的 facebook-scraper3 采集 Facebook 主页帖子（互动数据 / Reels / 媒体），结果输出为 CSV 并 upsert 到后端 |
 | [justoneapi-skill-builder](./skills/justoneapi-skill-builder/SKILL.md) | 元规范：当需要新建一个 JustOneAPI 平台 skill 时使用，提供工作流 / 代码规范 / DDL / 测试模板 |
 | [social-post-writer](./skills/social-post-writer/SKILL.md) | 根据 brief 与 KOL 信息生成小红书 / Instagram / Facebook 可发布帖子文案 |
 
