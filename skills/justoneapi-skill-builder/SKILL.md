@@ -32,31 +32,40 @@ skills/<platform>-justoneapi/
 
 ## 工作流
 
-按顺序走 6 步，**每一步都先与用户确认再继续**，不要跳步。
+按顺序走 6 步。**全流程只有 [步骤 2 DDL] 一处需要用户确认**，其余环节（含后端 upsert）全部由 agent 自行实现，不要等用户。
 
-### 1. 需求 & 接口映射（必须先问）
+### 1. 需求 & 接口映射（自助产出，无需确认）
 - 读用户给的 JustOneAPI 文档链接，挑出本次要做的 endpoint
 - 输出一张映射表：`用户意图 / endpoint / 必填参数 / 翻页参数`
-- 列出待确认问题：排序默认值？并发？特殊 ID 形态（如 IG 的 code vs media_id）？
-- **后端 upsert 是默认必备能力，不要再问用户"是否需要"**，直接按规范实现
+- 默认决策（不要再问）：排序取文档默认值；并发列表型 3 / 评论型 1；后端 upsert **必接**
 
-### 2. DDL 设计（必须用户确认）
-- 表前缀统一 `gg_skill_<platform>_`（如 `gg_skill_ig_posts`、`gg_skill_xhs_note_comments`）
+### 2. DDL 设计（**唯一需用户确认的环节**）
+- 输出 Supabase DDL 草案后**显式问用户**："DDL 没问题的话我直接执行并继续后续实现"
+- 表前缀统一 `gg_skill_<platform>_`（如 `gg_skill_ig_posts`、`gg_skill_xiaohongshu_note_comments`）
 - 业务主键用平台原生 ID 做 UNIQUE（小红书 `note_id`、IG `code`）
 - 子评论用 `(主键, comment_id)` 复合 UNIQUE，附 `is_sub / parent_comment_id / root_comment_id` 三件套
-- 必备列：`raw_data JSONB`（兜底新字段）、`created_at / updated_at TIMESTAMPTZ`、共享 `set_updated_at` 触发器
-- 详见 [conventions.md → DDL](./conventions.md#supabase-ddl-模板)
+- 必备列：`raw_data JSONB`、`created_at / updated_at TIMESTAMPTZ`、共享 `set_updated_at` 触发器
+- 用户确认后用 supabase 工具直接执行；详见 [conventions.md → DDL](./conventions.md#supabase-ddl-模板)
 
-### 3. 后端 upsert 接口（强制对接，等用户给路由路径）
-- **不要询问"要不要 upsert"**，每个采集脚本都必须 upsert，这是硬性规范
-- 路径约定：`POST https://www.goodgame.monster/api/skill/<platform>/<resource>/upsert`
-- 请求体：`{trace_id, items: [...]}`，响应 `{code: 0, data: {count}}`
-- 等用户告知 router 文件路径后 `view` 一遍 schema 确认字段名，再写 `UPLOAD_FIELD_MAP`
+### 3. 后端 upsert 实现（**agent 自助实现，不要等用户**）
+GoodGame 后端仓库位于 `/Users/noir/Projects/GoodGame/`，按下表 6 个文件分层落盘，**全部仿照 `xiaohongshu` 实现**（具体路径与代码模式见 [conventions.md → 后端文件分层](./conventions.md#后端文件分层规范)）：
 
-### 4. 文档落盘（按顺序）
+| # | 文件 | 职责 |
+|---|------|------|
+| 1 | `backend/KOL/orm/skill/<platform>_models.py` | Pydantic Model，字段对齐 Supabase 表 |
+| 2 | `backend/KOL/orm/skill/<platform>_repositories.py` | Repository 类：`TABLE` / `ON_CONFLICT` / `bulk_upsert` / `upsert` / `get_by_xxx` / `_row_to_model` |
+| 3 | `backend/KOL/orm/skill/__init__.py` | 导出新增 Models 和 Repositories |
+| 4 | `backend/api/schemas/skill_data_<platform>.py` | `<X>UpsertItem` / `<X>UpsertRequest(BaseRequest)` / `<X>UpsertResult` / `<X>Ref`（复合键时） |
+| 5 | `backend/api/routers/skill_data_<platform>.py` | `router = APIRouter()` + `@router.post("/skill/<platform>/<resource>/upsert", ...)` |
+| 6 | `backend/api/server.py` | `from .routers import ... <platform>...` + `app.include_router(<platform>.router, prefix="/api", tags=["skill-<platform>"])` |
+
+> 实现完直接进入步骤 4，无需提交后端 PR，也不用问用户 "后端好了吗"。
+
+### 4. Skill 文档与脚本落盘（按顺序）
 1. `SKILL.md` —— 复制 xhs/ig 同名文件，替换平台名 / 接口表 / 运行示例
 2. `apis/<endpoint>.md` —— 一接口一份，含请求 / 响应 / 字段表 / 翻页规则
-3. `scripts/<endpoint>.py` —— 复用 [conventions.md → 脚本模板](./conventions.md#脚本结构) 的两种范式
+3. `scripts/<endpoint>.py` —— 复用 [conventions.md → 脚本结构](./conventions.md#脚本结构) 的两种范式
+4. `UPLOAD_FIELD_MAP` 直接对齐步骤 3 写好的 schema 字段名
 
 ### 5. 真实接口冒烟测试（不要 mock）
 - 参考 `skills/instagram-justoneapi/tests/test_scripts_smoke.py`

@@ -190,6 +190,128 @@ if new:
 
 必备 CLI 选项：`positional_codes+`、`--output-dir`、`--sort`、`--max-top N`（顶层评论上限）、`--no-replies`（跳过阶段 2）。
 
+## 后端文件分层规范
+
+GoodGame 后端在 `/Users/noir/Projects/GoodGame/`，新平台 upsert 接口由 agent 自助实现，**严格按下面 6 个文件分层**。已有 `skill_data_xiaohongshu` / `skill_data_instagram` 作为参考实现，新平台直接 copy 同名文件改字段即可。
+
+### 1. ORM Model：`backend/KOL/orm/skill/<platform>_models.py`
+
+Pydantic Model，字段一一对应 Supabase 表。命名 `<Platform><Entity>`（如 `XiaohongshuNote`、`InstagramPost`）。
+
+```python
+class <Platform><Entity>(BaseModel):
+    """<中文说明>。 唯一约束: <biz_pk>"""
+    id: Optional[int] = Field(default=None, ge=1)
+    <biz_pk>: str
+    # ... 业务字段（与 DDL 一一对应，全部 Optional）
+    raw_data: Optional[Dict[str, Any]] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+```
+
+### 2. ORM Repository：`backend/KOL/orm/skill/<platform>_repositories.py`
+
+每个 Model 一个 Repository 类。**必备方法**：`upsert` / `bulk_upsert` / `get_by_<biz_pk>` / `_row_to_model`，可选 `list_by_xxx`。
+
+```python
+class <Platform><Entity>Repository:
+    TABLE = "gg_skill_<platform>_<entity>"
+    # 复合主键时再加 ON_CONFLICT
+    ON_CONFLICT = "<biz_pk>,comment_id"
+
+    @staticmethod
+    def bulk_upsert(items: List[Union[<Model>, Dict[str, Any]]]) -> List[<Model>]:
+        if not items: return []
+        client = get_client()
+        payloads = []
+        for it in items:
+            payload = it.model_dump(mode="json", exclude_none=True) if hasattr(it, "model_dump") else dict(it)
+            if payload.get("id") is None: payload.pop("id", None)
+            payloads.append(payload)
+        resp = client.table(<Repo>.TABLE).upsert(payloads, on_conflict="<biz_pk>").execute()
+        return [<Repo>._row_to_model(r) for r in (resp.data or [])]
+
+    @staticmethod
+    def _row_to_model(row): return <Model>(**row) if row else <Model>(<biz_pk>="")
+```
+
+复合键评论表的 `bulk_upsert` 把 `on_conflict` 改成 `<Repo>.ON_CONFLICT` 即可。
+
+### 3. ORM 包导出：`backend/KOL/orm/skill/__init__.py`
+
+```python
+from .<platform>_models import <Model1>, <Model2>, ...
+from .<platform>_repositories import <Repo1>, <Repo2>, ...
+
+__all__ = [..., "<Model1>", "<Repo1>", ...]   # 追加，别覆盖现有项
+```
+
+### 4. API Schema：`backend/api/schemas/skill_data_<platform>.py`
+
+每个资源四件套：`<X>UpsertItem` / `<X>UpsertRequest(BaseRequest)` / `<X>UpsertResult` / `<X>Ref`（仅复合键时）。
+
+```python
+class <Platform><Entity>UpsertItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    <biz_pk>: str = Field(..., min_length=1, description="...（唯一键）")
+    # 其余字段全 Optional，不设默认值
+
+class <Platform><Entity>UpsertRequest(BaseRequest):
+    model_config = ConfigDict(extra="ignore", json_schema_extra={"example": {...}})
+    items: List[<Platform><Entity>UpsertItem] = Field(default_factory=list)
+
+class <Platform>UpsertResult(BaseModel):
+    count: int = Field(0)
+    ids: List[str] = Field(default_factory=list)   # 复合键时改 items: List[<Ref>]
+```
+
+### 5. API Router：`backend/api/routers/skill_data_<platform>.py`
+
+```python
+from fastapi import APIRouter
+from jobs.logger import get_logger
+from ..schemas.base import BaseResponse
+from ..schemas.skill_data_<platform> import <X>UpsertRequest, <X>UpsertResult
+from KOL.orm.skill import <X>Repository
+
+logger = get_logger(__name__)
+router = APIRouter()
+
+@router.post("/skill/<platform>/<resource>/upsert", response_model=BaseResponse[<X>UpsertResult])
+async def upsert_<platform>_<resource>(body: <X>UpsertRequest) -> BaseResponse[<X>UpsertResult]:
+    """批量 upsert ..."""
+    if not body.items:
+        return BaseResponse.ok(<X>UpsertResult(count=0, ids=[]), trace_id=body.trace_id)
+    payloads = [it.model_dump(mode="json", exclude_unset=True) for it in body.items]
+    logger.info("【<resource> upsert】trace_id=%s 待写入条数=%d", body.trace_id, len(payloads))
+    saved = <X>Repository.bulk_upsert(payloads)
+    ids = [x.<biz_pk> for x in saved if getattr(x, "<biz_pk>", None)]
+    return BaseResponse.ok(<X>UpsertResult(count=len(saved), ids=ids), trace_id=body.trace_id)
+```
+
+`exclude_unset=True` 关键 —— 避免把客户端没传的字段覆盖成 NULL。
+
+### 6. Server 注册：`backend/api/server.py`
+
+两处改动（追加，不要重写整个文件）：
+
+```python
+# import 行追加新 router
+from .routers import (..., skill_data_xiaohongshu, skill_data_instagram, skill_data_<platform>)
+
+# create_app() 内追加挂载
+app.include_router(skill_data_<platform>.router, prefix="/api", tags=["skill-<platform>"])
+```
+
+### 自查
+
+- [ ] 6 个文件全部落盘 / 修改完成
+- [ ] Repository `TABLE` 名与 DDL 表名一致
+- [ ] Schema `UpsertItem` 字段与 ORM Model 字段一致（Optional 默认 None，不设默认值）
+- [ ] Router URL 与脚本里的 `BACKEND_URL` 完全对齐（含 `/api` 前缀）
+- [ ] `server.py` 的 import 与 `include_router` 都已追加
+- [ ] 不需要写后端单测
+
 ## 后端 upsert
 
 > **强制规范**：每个采集脚本都必须接入后端 upsert，不存在"只落 CSV 不上传"的脚本。无需向用户确认是否需要 upsert，直接实现。
