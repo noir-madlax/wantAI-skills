@@ -16,3 +16,8 @@ __pycache__/
 
 # logs
 search_logs
+
+# skill
+.agents
+.augment
+skills-lock.json
