@@ -36,7 +36,7 @@ SUB_ENDPOINT   = "/api/xiaohongshu/get-note-sub-comment/v2"
 TIMEOUT        = 60
 RETRY_MAX      = 3
 RETRY_SLEEP    = 2.0
-PAGE_SLEEP     = 0.5
+PAGE_SLEEP     = 0.1
 NO_RETRY_CODES = {100, 303, 400, 600, 601}
 _CST = timezone(timedelta(hours=8))
 

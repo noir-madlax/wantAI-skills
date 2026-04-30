@@ -33,7 +33,7 @@ API_URL     = "https://api.justoneapi.com/api/douyin/get-user-video-list/v3"
 TIMEOUT     = 60
 RETRY_MAX   = 3
 RETRY_SLEEP = 2.0
-PAGE_SLEEP  = 0.5
+PAGE_SLEEP  = 0.1
 _CST = timezone(timedelta(hours=8))
 
 CSV_COLUMNS = [

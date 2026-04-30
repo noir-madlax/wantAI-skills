@@ -51,7 +51,7 @@ BASE_URL    = "https://api.justoneapi.com"
 ENDPOINT    = "/api/xiaohongshu/search-note/v3"
 TIMEOUT     = 60
 RETRY_MAX   = 5       # 接口不稳定，重试次数高于其他接口
-PAGE_SLEEP  = 1.5     # 翻页间隔，避免触发 302
+PAGE_SLEEP  = 0.1     # 翻页间隔，避免触发 302
 
 # 不可重试的错误码（客户端侧无法修复）
 NO_RETRY_CODES = {100, 303, 400, 600, 601}
