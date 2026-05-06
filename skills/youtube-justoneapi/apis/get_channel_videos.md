@@ -5,7 +5,7 @@
 ## 请求
 
 ```
-GET https://api.justoneapi.com/api/youtube/channel-videos/v1
+GET https://api.justoneapi.com/api/youtube/get-channel-videos/v1
 ```
 
 > 中国大陆访问慢时，将 base URL 替换为 `http://47.117.133.51:30015`

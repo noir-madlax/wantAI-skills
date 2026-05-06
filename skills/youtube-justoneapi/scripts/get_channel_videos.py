@@ -29,7 +29,7 @@ def load_token():
 
 # ── 常量 ──────────────────────────────────────────────────────
 BASE_URL      = "https://api.justoneapi.com"
-ENDPOINT      = "/api/youtube/channel-videos/v1"
+ENDPOINT      = "/api/youtube/get-channel-videos/v1"
 BACKEND_URL   = "https://www.goodgame.monster/api/skill/youtube/videos/upsert"
 TIMEOUT       = 60
 RETRY_MAX     = 3

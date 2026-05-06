@@ -30,8 +30,8 @@ def load_token():
 
 # ── 常量 ──────────────────────────────────────────────────────
 BASE_URL       = "https://api.justoneapi.com"
-TOP_ENDPOINT   = "/api/youtube/video-comment-list/v1"
-SUB_ENDPOINT   = "/api/youtube/video-sub-comment-list/v1"
+TOP_ENDPOINT   = "/api/youtube/get-video-comment/v1"
+SUB_ENDPOINT   = "/api/youtube/get-video-sub-comment/v1"
 BACKEND_URL    = "https://www.goodgame.monster/api/skill/youtube/comments/upsert"
 TIMEOUT        = 60
 RETRY_MAX      = 3

@@ -9,7 +9,7 @@
 ### 请求
 
 ```
-GET https://api.justoneapi.com/api/youtube/video-comment-list/v1
+GET https://api.justoneapi.com/api/youtube/get-video-comment/v1
 ```
 
 ### 参数
@@ -73,7 +73,7 @@ GET https://api.justoneapi.com/api/youtube/video-comment-list/v1
 ### 请求
 
 ```
-GET https://api.justoneapi.com/api/youtube/video-sub-comment-list/v1
+GET https://api.justoneapi.com/api/youtube/get-video-sub-comment/v1
 ```
 
 ### 参数
