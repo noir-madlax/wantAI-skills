@@ -40,8 +40,7 @@ NO_RETRY_CODES = {100, 303, 400, 600, 601}
 CSV_COLUMNS = [
     "video_id", "channel_id", "title", "description", "url", "playback_url",
     "duration", "duration_text", "thumbnail", "thumbnails", "moving_thumbnail",
-    "published_time_text", "view_count_text", "view_count",
-    "like_count_text", "like_count", "creator_thumbnail_url", "raw_data",
+    "published_time_text", "view_count_text", "view_count", "raw_data",
 ]
 UPLOAD_FIELDS = set(CSV_COLUMNS) - {"thumbnails", "raw_data"}
 
@@ -87,6 +86,7 @@ def _request(token, params):
 
 # ── 数据转换 ──────────────────────────────────────────────────
 def video_to_row(v, channel_id):
+    view_text = v.get("view_count")
     return {
         "video_id":           v.get("video_id", ""),
         "channel_id":         channel_id,
@@ -95,16 +95,13 @@ def video_to_row(v, channel_id):
         "url":                v.get("url"),
         "playback_url":       v.get("playback_url"),
         "duration":           v.get("duration"),
-        "duration_text":      v.get("duration_text"),
+        "duration_text":      v.get("duration_accessibility"),
         "thumbnail":          v.get("thumbnail"),
         "thumbnails":         v.get("thumbnails") or [],
         "moving_thumbnail":   v.get("moving_thumbnail"),
-        "published_time_text": v.get("published_time_text"),
-        "view_count_text":    v.get("view_count_text"),
-        "view_count":         _safe_int(v.get("view_count")),
-        "like_count_text":    v.get("like_count_text"),
-        "like_count":         _safe_int(v.get("like_count")),
-        "creator_thumbnail_url": v.get("creator_thumbnail_url"),
+        "published_time_text": v.get("published_time"),
+        "view_count_text":    view_text if isinstance(view_text, str) else None,
+        "view_count":         _safe_int(view_text),
         "raw_data":           v,
     }
 

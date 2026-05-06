@@ -84,6 +84,7 @@ def _request(token, endpoint, params):
 # ── 数据转换 ──────────────────────────────────────────────────
 def comment_to_row(c, video_id, is_sub, parent_comment_id, root_comment_id):
     cid = c.get("comment_id", "")
+    author = c.get("author") or {}
     return {
         "comment_id":             cid,
         "video_id":               video_id,
@@ -91,15 +92,15 @@ def comment_to_row(c, video_id, is_sub, parent_comment_id, root_comment_id):
         "parent_comment_id":      parent_comment_id,
         "root_comment_id":        root_comment_id or cid,
         "content":                c.get("content"),
-        "published_time_text":    c.get("published_time_text"),
-        "like_count_text":        c.get("like_count_text"),
+        "published_time_text":    c.get("published_time"),
+        "like_count_text":        c.get("like_count_a11y"),
         "like_count":             _safe_int(c.get("like_count")),
         "reply_count":            _safe_int(c.get("reply_count")),
         "reply_continuation_token": c.get("reply_continuation_token"),
-        "author_name":            c.get("author_name"),
-        "author_id":              c.get("author_id"),
-        "author_thumbnail":       c.get("author_thumbnail"),
-        "is_creator":             c.get("is_creator", False),
+        "author_name":            author.get("display_name"),
+        "author_id":              author.get("channel_id"),
+        "author_thumbnail":       author.get("avatar_url"),
+        "is_creator":             author.get("is_creator", False),
         "creator_thumbnail_url":  c.get("creator_thumbnail_url"),
         "raw_data":               c,
     }
