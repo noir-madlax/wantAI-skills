@@ -18,7 +18,10 @@ GET https://api.justoneapi.com/api/youtube/get-video-comment/v1
 |------|:----:|------|:------:|------|
 | `token` | ✅ | string | — | JustOneAPI 访问令牌 |
 | `videoId` | ✅ | string | — | YouTube 视频 ID |
-| `continuationToken` | ❌ | string | — | 翻页游标；**首页不传**，后续传上一页响应的 `data.continuation_token` |
+| `cursor` | ❌ | string | — | 翻页游标；**首页不传**，后续传上一页响应的 `data.continuation_token` |
+| `sortBy` | ❌ | string | `newest` | 排序：`top`=热门 / `newest`=最新 |
+| `languageCode` | ❌ | string | `zh-CN` | 响应语言 |
+| `countryCode` | ❌ | string | `US` | 地区 |
 
 ### 响应
 
@@ -81,9 +84,9 @@ GET https://api.justoneapi.com/api/youtube/get-video-sub-comment/v1
 | 参数 | 必填 | 类型 | 默认值 | 说明 |
 |------|:----:|------|:------:|------|
 | `token` | ✅ | string | — | JustOneAPI 访问令牌 |
-| `videoId` | ✅ | string | — | 视频 ID（与顶层评论同一视频） |
-| `commentId` | ✅ | string | — | 顶层评论 `comment_id` |
-| `continuationToken` | ✅ | string | — | **首页**传顶层评论的 `reply_continuation_token`；后续翻页传本接口响应的 `data.continuation_token` |
+| `cursor` | ✅ | string | — | **首页**传顶层评论的 `reply_continuation_token`；后续翻页传本接口响应的 `data.continuation_token` |
+| `languageCode` | ❌ | string | `zh-CN` | 响应语言 |
+| `countryCode` | ❌ | string | `US` | 地区 |
 
 ### 响应
 
@@ -122,15 +125,15 @@ GET https://api.justoneapi.com/api/youtube/get-video-sub-comment/v1
 
 两个接口分页方式一致：
 
-1. 首页：顶层评论不传 `continuationToken`；子评论首页用顶层评论的 `reply_continuation_token`
-2. 翻页：取响应中 `data.continuation_token` 作为下一次请求的 `continuationToken`
+1. 首页：顶层评论不传 `cursor`；子评论首页用顶层评论的 `reply_continuation_token` 作为 `cursor`
+2. 翻页：取响应中 `data.continuation_token` 作为下一次请求的 `cursor`
 3. 终止条件：`data.continuation_token` 为空/null，或 `data.comments` 为空
 
 ## 配套用法
 
 1. 调用「顶层评论」翻完所有页
 2. 收集本页中 `reply_continuation_token` 非空且 `reply_count > 0` 的评论
-3. 对每条评论用其 `reply_continuation_token` 调用「子评论」翻完所有页（`commentId` 传顶层评论 ID）
+3. 对每条评论用其 `reply_continuation_token` 作为 `cursor` 调用「子评论」翻完所有页
 4. 入库映射：
    - **顶层评论**：`is_sub=0`，`parent_comment_id=NULL`，`root_comment_id = 自身 comment_id`
    - **子评论**：`is_sub=1`，`parent_comment_id = comment_id` 中 `.` 之前部分，`root_comment_id = 顶层评论 id`

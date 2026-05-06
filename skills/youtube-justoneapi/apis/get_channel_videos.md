@@ -16,7 +16,7 @@ GET https://api.justoneapi.com/api/youtube/get-channel-videos/v1
 |------|:----:|------|:------:|------|
 | `token` | ✅ | string | — | JustOneAPI 访问令牌，通过 query 参数传递 |
 | `channelId` | ✅ | string | — | YouTube 频道 ID（形如 `UCxxxxxxxxxxxxxxxx`） |
-| `continuationToken` | ❌ | string | — | 翻页游标；**首页不传**，后续传上一页响应的 `data.continuation_token` |
+| `cursor` | ❌ | string | — | 翻页游标；**首页不传**，后续传上一页响应的 `data.continuation_token` |
 
 ## 响应
 
@@ -59,14 +59,14 @@ GET https://api.justoneapi.com/api/youtube/get-channel-videos/v1
 | `data.videos[].view_count` | 播放量文本，如 `135,254次观看`；非纯数字，需正则提取 |
 | `data.videos[].published_time` | 发布时间相对文本，如 `2天前` / `1个月前`，**非时间戳** |
 | `data.videos[].is_live` / `is_verified` | 是否直播 / 是否认证 |
-| `data.continuation_token` | 下一页 `continuationToken` 取值；为空/null 表示已到末页 |
+| `data.continuation_token` | 下一页 `cursor` 取值；为空/null 表示已到末页 |
 
 > ⚠️ **响应里不包含 `channel_id`**。脚本在写库时由请求参数 `channelId` 回填到每一行。
 
 ## 分页
 
-1. 首页：不传 `continuationToken`
-2. 翻页：取响应中 `data.continuation_token` 作为下一次请求的 `continuationToken`
+1. 首页：不传 `cursor`
+2. 翻页：取响应中 `data.continuation_token` 作为下一次请求的 `cursor`
 3. 终止条件：`data.continuation_token` 为空 / null，或 `data.videos` 为空
 
 ## 入库映射

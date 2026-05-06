@@ -171,7 +171,7 @@ def main():
         while True:
             params = {"channelId": args.channel_id}
             if token_cur:
-                params["continuationToken"] = token_cur
+                params["cursor"] = token_cur
 
             data = _request(token, params)
             if data is None:

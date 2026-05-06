@@ -48,8 +48,8 @@ JUSTONEAPI_TOKEN=your_token_here
 
 ## 翻页机制
 
-- **频道视频**、**顶层评论**：使用响应根的 `data.continuation_token` 作为下一页的 `continuationToken` 参数。
-- **子评论**：来源为顶层评论中的 `reply_continuation_token`，传给 `video-sub-comment-list/v1` 的 `continuationToken`；后续翻页继续使用该接口返回的 `data.continuation_token`。
+- **频道视频**、**顶层评论**：使用响应根的 `data.continuation_token` 作为下一页的 `cursor` 参数。
+- **子评论**：来源为顶层评论中的 `reply_continuation_token`，传给 `get-video-sub-comment/v1` 的 `cursor`；后续翻页继续使用该接口返回的 `data.continuation_token`。
 - **comment_id 命名约定**：子评论 `comment_id` 形如 `<父评论id>.<子id>`，可由此还原父子关系。
 
 ## 运行方式

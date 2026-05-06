@@ -169,7 +169,7 @@ def main():
             reached_limit = False
             while not reached_limit:
                 params = {"videoId": args.video_id}
-                if token_cur: params["continuationToken"] = token_cur
+                if token_cur: params["cursor"] = token_cur
                 data = _request(token, TOP_ENDPOINT, params)
                 if data is None:
                     print(f"[顶层第{page}页] 请求失败，保存进度")
@@ -220,8 +220,7 @@ def main():
                 sub_page  = 1
                 sub_total = 0
                 while True:
-                    params = {"videoId": args.video_id, "commentId": root_id}
-                    if sub_token: params["continuationToken"] = sub_token
+                    params = {"cursor": sub_token}
                     data = _request(token, SUB_ENDPOINT, params)
                     if data is None:
                         print(f"[子评论 {root_id} 第{sub_page}页] 失败，保存进度")
