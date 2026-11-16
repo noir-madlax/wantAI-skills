@@ -4,7 +4,7 @@
 Two subcommands:
 
   check   Verify everything the loop depends on is installed. Exit 2 if not.
-  run     Ask a fresh agy conversation to run /code-review against the committed
+  run     Ask a fresh agy conversation to run /code-review against the uncommitted
           diff, verify the run really completed, and save the report.
 
 Exit codes (the caller branches on these, so keep them stable):
@@ -21,6 +21,7 @@ Standard library only, so it runs with a bare `python3`.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -61,9 +62,10 @@ ALLOWED_COMMANDS = [
 ]
 ALLOWED_SUMMARY = "diff、log、show、status、grep、blame、rev-parse、rev-list、merge-base、ls-files、ls-tree、cat-file、describe、shortlog，以及 branch 的 --show-current / --list / -a / -r"
 
-PROMPT = """/code-review {base}
+PROMPT = """/code-review {fixed}
 
 补充输入与约束：
+- 审查对象是**尚未提交**的改动：基准点 `{fixed}` 到当前工作区。不要用 `git diff {fixed}...HEAD`，它看不到未提交内容。已跟踪文件的改动用 `git diff {fixed}` 查看；新增文件用 `git ls-files --others --exclude-standard` 列出后直接读取，它们同样属于本次改动。
 - 规格来源：{spec_line}
 - 全程只读：不修改、不创建、不删除任何文件，不提交，不切换分支。
 - 只做静态审查：可用的终端命令仅限 git 的这些只读子命令：{allowed}。其余一律用读文件和搜索工具，不要用 cat / grep / find / ls 等 shell 命令。不要运行类型检查、lint、测试、构建或任何 npm / npx / node / python 命令，这些由开发方负责；其他命令会被拒绝并导致整次审查作废。
@@ -156,11 +158,28 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def untracked(repo: Path) -> list[str]:
+    out = git("ls-files", "--others", "--exclude-standard", "-z", cwd=repo)
+    return [f for f in out.split("\0") if f]
+
+
 def snapshot(repo: Path) -> dict[str, str]:
+    """State the reviewer must not change. The changes under review are uncommitted,
+    so `git status` alone is not enough: an already-modified file stays `M` even if
+    the reviewer edits it again. Fingerprint the content as well."""
+    digest = hashlib.sha256()
+    digest.update(subprocess.run(["git", "diff", "HEAD", "--binary"], cwd=repo,
+                                 capture_output=True, check=True).stdout)
+    for name in untracked(repo):
+        path = repo / name
+        digest.update(name.encode() + b"\0")
+        if path.is_file():
+            digest.update(path.read_bytes())
     return {
         "head": git("rev-parse", "HEAD", cwd=repo),
         "branch": git("branch", "--show-current", cwd=repo),
         "status": git("status", "--porcelain", cwd=repo),
+        "content": digest.hexdigest(),
     }
 
 
@@ -212,13 +231,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         eprint(f"基准点 `{args.base}` 无法解析。")
         return 5
     before = snapshot(repo)
-    if git("diff", "--stat", f"{args.base}...HEAD", cwd=repo) == "":
-        eprint(f"`{args.base}...HEAD` 没有已提交的改动。审查只看已提交内容，请先提交。")
-        eprint(f"如果就是直接在 `{args.base}` 上开发的，把 --base 换成开工前的那个提交。")
-        return 5
-    if before["status"] and not args.allow_dirty:
-        eprint("工作区有未提交改动；审查者只会看到已提交内容。请先提交，或加 --allow-dirty。")
-        eprint(before["status"])
+    fixed = git("merge-base", args.base, "HEAD", cwd=repo)
+    if git("diff", "--stat", fixed, cwd=repo) == "" and not untracked(repo):
+        eprint(f"相对 `{args.base}` 没有任何改动（已提交和未提交的都没有）。")
         return 5
     if args.spec:
         if not (repo / args.spec).exists() and not Path(args.spec).exists():
@@ -246,7 +261,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     report_path = out_dir / f"round-{round_no}.md"
 
     # --- run the reviewer --------------------------------------------------
-    prompt = PROMPT.format(base=args.base, spec_line=spec_line, allowed=ALLOWED_SUMMARY)
+    prompt = PROMPT.format(base=args.base, fixed=fixed, spec_line=spec_line, allowed=ALLOWED_SUMMARY)
     settings = {"permissions": {"allow": [f"command({c})" for c in ALLOWED_COMMANDS]}}
     command = [
         agy,
@@ -311,7 +326,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             f"<!-- dev-review-loop round {round_no}",
             f"reviewer: agy / {args.model}",
             f"conversation_id: {result.get('conversation_id')}",  # type: ignore[union-attr]
-            f"base: {args.base}",
+            f"base: {args.base} (fixed point {fixed})",
             f"head: {before['head']}",
             f"branch: {before['branch']}",
             f"spec: {args.spec or '(none)'}",
@@ -352,7 +367,7 @@ def main() -> int:
     check.set_defaults(func=cmd_check)
 
     run = sub.add_parser("run", help="run one review round in the current worktree")
-    run.add_argument("--base", default="main", help="fixed point to diff against (default: main)")
+    run.add_argument("--base", default="HEAD", help="fixed point; the review covers everything from its merge-base with HEAD to the working tree (default: HEAD, i.e. only uncommitted changes)")
     run.add_argument("--spec", help="path to the spec the change implements")
     run.add_argument("--spec-note", help="which part of the spec applies, e.g. '第三批 3c 一节'")
     run.add_argument("--no-spec", action="store_true", help="there is no spec; skip the Spec axis")
@@ -360,7 +375,6 @@ def main() -> int:
     run.add_argument("--round", type=int, help="round number (default: next free one)")
     run.add_argument("--out", help="output directory (default: inside .git, never tracked)")
     run.add_argument("--timeout", type=int, default=1800, help="seconds to wait for the reviewer")
-    run.add_argument("--allow-dirty", action="store_true", help="review even with uncommitted changes")
     run.set_defaults(func=cmd_run)
 
     args = parser.parse_args()
