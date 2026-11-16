@@ -26,6 +26,7 @@ npx skills add wantAI/wantAI-skills -a cursor -a augment
 | [facebook-rapidapi](./skills/facebook-rapidapi/SKILL.md) | 支持获取主页帖子（含 Reels / 互动数据 / 媒体） |
 | [justoneapi-skill-builder](./skills/justoneapi-skill-builder/SKILL.md) | 元规范：当需要新建一个 JustOneAPI 平台 skill 时使用，提供工作流 / 代码规范 / DDL / 测试模板 |
 | [social-post-writer](./skills/social-post-writer/SKILL.md) | 根据 brief 与 KOL 信息生成小红书 / Instagram / Facebook 可发布帖子文案 |
+| [dev-review-loop](./skills/dev-review-loop/SKILL.md) | 开发 → 外部模型 code review → 按意见修改 → 再审 → 推送并给出 PR 链接，全程不需要人工传话（依赖 `code-review` skill 和 Antigravity 命令行 `agy`） |
 | [brand-post-writer](./skills/brand-post-writer/SKILL.md) | 根据品牌人设、产品矩阵、品牌护栏与 brief 生成小红书 / 公众号 / Instagram / Facebook 品牌官方账号帖子文案 |
 
 ## 目录结构
