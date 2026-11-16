@@ -212,11 +212,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         eprint(f"基准点 `{args.base}` 无法解析。")
         return 5
     before = snapshot(repo)
-    if not before["branch"]:
-        eprint("当前是游离 HEAD，请先切到功能分支。")
-        return 5
     if git("diff", "--stat", f"{args.base}...HEAD", cwd=repo) == "":
         eprint(f"`{args.base}...HEAD` 没有已提交的改动。审查只看已提交内容，请先提交。")
+        eprint(f"如果就是直接在 `{args.base}` 上开发的，把 --base 换成开工前的那个提交。")
         return 5
     if before["status"] and not args.allow_dirty:
         eprint("工作区有未提交改动；审查者只会看到已提交内容。请先提交，或加 --allow-dirty。")
@@ -240,7 +238,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         git_path = Path(git("rev-parse", "--git-path", "dev-review-loop", cwd=repo))
         if not git_path.is_absolute():
             git_path = repo / git_path
-        out_dir = git_path / re.sub(r"[^A-Za-z0-9._-]+", "-", before["branch"])
+        out_dir = git_path / re.sub(r"[^A-Za-z0-9._-]+", "-", before["branch"] or "detached")
     out_dir.mkdir(parents=True, exist_ok=True)
     round_no = args.round or (len(list(out_dir.glob("round-*.md"))) + 1)
     stream_path = out_dir / f"round-{round_no}.ndjson"
