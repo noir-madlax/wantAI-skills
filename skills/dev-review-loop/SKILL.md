@@ -30,7 +30,7 @@ python3 "$SKILL_DIR/scripts/external_review.py" check
 
 退出码是 2 时，把它列出的缺失项和安装方法原样告诉用户，然后**停止**，不要开始开发。先查再做的原因是：缺依赖时循环跑不起来，等写完代码才发现，用户就得回到手工传话。
 
-本 skill 依赖两个 skill（`code-review` 和它引用的 `setup-matt-pocock-skills`），以及已登录、能用所选模型的 `agy`。不要替用户安装它们。
+本 skill 依赖两个 skill（`code-review` 和它引用的 `setup-matt-pocock-skills`），以及已登录、能用所选模型的 `agy`。这两个 skill 必须对 **agy** 可见（`~/.gemini/config/skills/` 或仓库的 `.agents/skills/`），只装给 Claude Code 不算：agy 找不到 skill 时不会报错，而是把 `/code-review` 当普通文字、自己随意发挥。不要替用户安装或链接它们，把 `check` 给出的命令告诉用户。
 
 ## 2. 确认输入
 
@@ -64,7 +64,7 @@ python3 "$SKILL_DIR/scripts/external_review.py" check
 python3 "$SKILL_DIR/scripts/external_review.py" run --base <开工时记下的提交> --spec <规格文件>
 ```
 
-规格只有某一节相关时加 `--spec-note "第三批 3c 一节"`。没有规格时用 `--no-spec`。默认模型是 `gemini-4-carbon-high`，用户另有指定时加 `--model`。
+规格只有某一节相关时加 `--spec-note "第三批 3c 一节"`。没有规格时用 `--no-spec`。默认模型是 `gemini-4-neon-high`（Gemini 4 Neon，Carbon 派生的中档模型，High 是它的默认思考档），用户另有指定时加 `--model`。
 
 每一轮都是**全新的对话**、对整个 diff 重新审。不续接上一轮的原因：续接时审查者倾向于只核对“上次那几条修没修”，对修改过程中新引入的问题不敏感；全量重审时，没修好的问题会自己再冒出来。也因此不要把上一轮的结论或你的反驳理由传给审查者。
 
@@ -74,7 +74,7 @@ python3 "$SKILL_DIR/scripts/external_review.py" run --base <开工时记下的�
 |---|---|---|
 | 0 | 完成 | 读它打印的 `report` 路径 |
 | 3 | 审查没跑完 | **不是零发现**。见 `references/reviewer-cli.md`，重试一次，仍失败就停下告诉用户 |
-| 4 | 审查者改动了 worktree | 停下，把前后差异告诉用户 |
+| 4 | 审查者改动了 worktree | 停下，把前后差异和备份位置告诉用户；不要自动恢复，用户同意后按 stderr 给出的步骤恢复 |
 | 5 | 前置条件不满足 | 按提示修正（例如基准点写错、没有任何改动）后重跑 |
 
 退出码 3 值得特别小心：`agy` 在审查中途被权限拦下时，自己仍会报告“成功”并返回空内容。脚本已经替你识别了这种情况；如果把它当成“没有问题”放行，就等于没审查就推送了。
@@ -178,4 +178,4 @@ python3 "$SKILL_DIR/scripts/external_review.py" run --base <开工时记下的�
 
 ## 参考
 
-- `references/reviewer-cli.md`：`agy` 无头模式的实测行为、退出码 3 的排查方法、如何调整命令放行清单。审查脚本报错时再读。
+- `references/reviewer-cli.md`：`agy` 无头模式的实测行为、退出码 3 的排查方法、为什么不用 `--mode plan`、退出码 4 时怎么恢复。审查脚本报错时再读。
